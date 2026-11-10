@@ -1672,7 +1672,7 @@ async function webBoot() {
     E('main').innerHTML = `<div class="card stack"><h2>Chưa cấu hình Firebase</h2><p class="hint">Mở tệp <b>firebase-config.js</b> trong repository và dán cấu hình dự án Firebase (xem README.md).</p></div>`; return;
   }
   fbApp = firebase.initializeApp(cfg); fbAuth = firebase.auth(); db = firebase.firestore();
-  try { db.enablePersistence && await db.enablePersistence({ synchronizeTabs: true }); } catch (e) { }
+  // Không lưu bản sao dữ liệu trên máy (an toàn cho máy dùng chung)
   try { const m = await db.doc('config/meta').get(); S.noOwner = !m.exists; } catch (e) { S.noOwner = false; }
   S.mode = 'db'; S.authReady = true;
   fbAuth.onAuthStateChanged(u => { if (S.settingUp) return; if (S.noOwner && !u) { render(); return; } onAuth(u); });
