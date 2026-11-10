@@ -4,7 +4,10 @@ const EMAIL_DOMAIN = '@eps-lichtruc.app';
 let fbApp = null, fbAuth = null, CURRENT_UID = null, rolesUnsub = null, subs = [];
 S.roles = []; S.noOwner = false; S.authReady = false;
 
-function setStaff(raw, src) { STAFF = toStaff(raw || []); IDX = new Map(STAFF.map(s => [s.id, s])); S.staffSource = src || ''; }
+/* Firestore không nhận mảng lồng nhau: mỗi nhân sự lưu thành một chuỗi, các cột cách nhau bằng ký tự tab */
+const encStaff = list => list.map(r => Array.isArray(r) ? r.map(x => String(x ?? '').replace(/[\t\n]/g, ' ')).join('\t') : r);
+const decStaff = list => (list || []).map(r => typeof r === 'string' ? r.split('\t') : r);
+function setStaff(raw, src) { STAFF = toStaff(decStaff(raw)); IDX = new Map(STAFF.map(s => [s.id, s])); S.staffSource = src || ''; }
 function toEmail(u) { return String(u).trim().toLowerCase() + EMAIL_DOMAIN; }
 resolveSession = function () { };
 
@@ -125,7 +128,7 @@ ACT.importSeed = async () => {
   const f = E('seedfile').files[0]; if (!f) { toast('Hãy chọn tệp .json'); return; }
   try {
     const J = JSON.parse(await f.text()); let n = 0;
-    if (J.staff) { await db.doc('staff/main').set({ list: J.staff, source: J.staffSource || f.name, updatedAt: Date.now() }); n++; }
+    if (J.staff) { await db.doc('staff/main').set({ list: encStaff(J.staff), source: J.staffSource || f.name, updatedAt: Date.now() }); n++; }
     if (J.org) { await db.doc('org/main').set(J.org); n++; }
     for (const [k, v] of Object.entries(J.phones || {})) { await db.doc('phones/' + k).set(v); n++; }
     for (const [k, v] of Object.entries(J.outside || {})) { await db.doc('outside/' + k).set(v); n++; }
@@ -145,7 +148,7 @@ ACT.importStaff = async () => {
     rows.slice(hi + 1).forEach(r => { let id = String(r[ci[0]]).trim(); const name = String(r[ci[1]]).trim(); if (!id || !name) return;
       if (seen.has(id)) { seen.set(id, seen.get(id) + 1); id = 'CHUA-CO-SH-' + id + '-' + seen.get(id); } else seen.set(id, 1);
       out.push([id, name, r[ci[2]] || '', String(r[ci[3]]).trim(), String(r[ci[4]]).trim(), String(r[ci[5]]).trim(), String(r[ci[6]]).trim()]); });
-    await db.doc('staff/main').set({ list: out, source: f.name + ' (' + new Date().toLocaleDateString('vi-VN') + ')', updatedAt: Date.now() }); toast(`Đã cập nhật ${out.length} nhân sự.`);
+    await db.doc('staff/main').set({ list: encStaff(out), source: f.name + ' (' + new Date().toLocaleDateString('vi-VN') + ')', updatedAt: Date.now() }); toast(`Đã cập nhật ${out.length} nhân sự.`);
   } catch (x) { toast('Không đọc được tệp: ' + (x.message || x)); }
 };
 
