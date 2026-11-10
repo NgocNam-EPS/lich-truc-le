@@ -1521,7 +1521,8 @@ function makeAst() {
     delete: async assetId => { const [id, n] = assetId.split(':'); for (let i = 0; i < +n; i++) await db.doc(`filedata/${id}_${i}`).delete(); }
   };
 }
-fileBlob = async function (f) { return ast.read(f.assetId, f.type); };
+let READER = null;
+fileBlob = async function (f) { READER = READER || makeAst(); return READER.read(f.assetId, f.type); };
 
 /* ===== Đăng nhập ===== */
 viewLogin = function () {
