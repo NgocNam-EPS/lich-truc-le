@@ -359,7 +359,7 @@ function viewPx(px, tab) {
   const head = `<section class="card stack">
     <div class="row between"><div class="grow"><h2>${esc(PXI[px].name)} · ${esc(h.name)}</h2>
       <p class="hint">${h.days.map(d => `${wdShort(d.date)} ${dm(d.date)}${!d.ca1 ? ' (từ 19h)' : ''}`).join(' · ')}</p></div>
-      <div class="row">${statusPill(u.status)}${statusActions(px, u, ck)}</div></div>
+      <div class="row">${statusPill(u.status)}<button class="btn" data-act="exportPx" data-px="${px}" title="Tải file Excel lịch trực của phân xưởng">Xuất Excel</button>${statusActions(px, u, ck)}</div></div>
     ${u.status === 'returned' && u.note ? `<p class="notice bad">Lý do trả lại: ${esc(u.note)}</p>` : ''}
     ${u.status === 'submitted' && !isAdmin() ? '<p class="notice">Đã gửi duyệt. Muốn sửa, bấm "Rút lại để sửa".</p>' : ''}
     ${ck.err.length ? `<details ${ck.err.length < 6 ? 'open' : ''}><summary class="hint"><b style="color:var(--danger)">${ck.err.length} mục còn thiếu</b> (cần đủ mới gửi duyệt được)</summary><ul class="msgs">${ck.err.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : '<p class="notice good">Đã đủ dữ liệu bắt buộc.</p>'}
@@ -395,7 +395,8 @@ function pathOf(kind, px, key) { return [kind, px, key].join('§'); }
 /* ===== Lịch ca trực ===== */
 function viewRoster(px, u, h, ed) {
   const isGC = px === 'gc-ph'; const leads = staffOf(px).filter(s => s.cat === 'Lãnh đạo Đơn vị' || s.cat === 'Quản lý tổ').sort((a, b) => (a.cat === 'Lãnh đạo Đơn vị' ? 0 : 1) - (b.cat === 'Lãnh đạo Đơn vị' ? 0 : 1));
-  let html = `<section class="card row between"><p class="hint grow">Nhập người trực từng ca. Bấm <b>NT</b> để đánh dấu nhóm trưởng (số điện thoại NT sẽ in trên lịch). Ca SCTX và thuê ngoài không tính giờ làm thêm.</p>
+  let html = `<section class="card row"><span class="hint">Người ký trên file Excel của phân xưởng:</span><input id="sgt_r" type="text" value="${esc(u.signer.title)}" data-ch="signer" data-f="title" data-px="${px}" ${ed ? '' : 'disabled'} style="width:150px" aria-label="Chức danh người ký"><input id="sgn_r" type="text" value="${esc(u.signer.name)}" placeholder="Họ tên Quản đốc" data-ch="signer" data-f="name" data-px="${px}" ${ed ? '' : 'disabled'} style="min-width:200px" aria-label="Họ tên người ký"></section>
+  <section class="card row between"><p class="hint grow">Nhập người trực từng ca. Bấm <b>NT</b> để đánh dấu nhóm trưởng (số điện thoại NT sẽ in trên lịch). Ca SCTX và thuê ngoài không tính giờ làm thêm.</p>
     ${ed ? `<details><summary class="hint">Vị trí trực (${u.groups.filter(Boolean).length || 'một vị trí'})</summary><div class="stack" style="margin-top:8px">${u.groups.map((g, gi) => `<div class="row"><input id="grp${gi}" type="text" value="${esc(g)}" placeholder="(không ghi vị trí)" data-ch="grpName" data-px="${px}" data-i="${gi}">${u.groups.length > 1 ? `<button class="btn sm danger" data-act="grpDel" data-px="${px}" data-i="${gi}">Xóa</button>` : ''}</div>`).join('')}<button class="btn sm" data-act="grpAdd" data-px="${px}">+ Thêm vị trí</button></div></details>` : ''}</section>`;
   h.days.forEach((day, di) => {
     html += `<section class="day">${leaf(day.date)}<div class="daybody">`;
@@ -834,6 +835,7 @@ const ACT = {
   returnOpen: el => { S.panel = { type: 'return', px: el.dataset.px }; render(); },
   returnDo: el => { const n = E('retnote').value.trim(); mutUnit(el.dataset.px, u => { u.status = 'returned'; u.note = n; }); S.panel = null; render(); toast('Đã trả lại.'); },
   export: el => doExport(el.dataset.v),
+  exportPx: el => doExport('PX', el.dataset.px),
   cxAddRow: el => mutUnit('gc-ph', u => u.congxa.sections[+el.dataset.i].rows.push({ name: '', phone: '', serve: '', span: '', marks: {} })),
   cxDelRow: el => mutUnit('gc-ph', u => u.congxa.sections[+el.dataset.i].rows.splice(+el.dataset.r, 1)),
   cxAddSec: el => mutUnit('gc-ph', u => u.congxa.sections.push(el.dataset.t === 'shift' ? { id: uid('s'), title: 'Trực phục vụ …', type: 'shift', rows: [{ ca: 'Ca1', cells: {} }, { ca: 'Ca2', cells: {} }] } : { id: uid('s'), title: 'Trực phục vụ …', type: 'mark', rows: [] })),
@@ -943,9 +945,10 @@ const DEFAULT_NOTES = ['- Lãnh đạo Công ty, Các đơn vị Trưởng, đơ
 const DEFAULT_REC = ['- Tổng Công ty phát điện 3 (để báo cáo);', '- Công ty Nhiệt điện Phú Mỹ (để phối hợp);', '- Công ty Nhiệt điện Mông Dương (để phối hợp);', '- Công ty Nhiệt điện Vĩnh Tân (để phối hợp);', '- Nhà máy Nhiệt điện Vĩnh Tân 4 (để phối hợp)', '- Trung tâm Dịch vụ Vận hành EVNGENCO3', '- Ban Lãnh đạo Công ty EPS;', '- Các Phòng/ Phân xưởng Công ty EPS;', '- Lưu: VT, KT-AT.'];
 
 /* ===== Xuất file ===== */
-async function doExport(kind) {
+async function doExport(kind, px) {
   const h = H(); if (!h) return; if (!dl) { toast('Chế độ xem này không cho tải file. Hãy mở ứng dụng trên claude.ai.'); return; }
   const units = Object.fromEntries(PX.map(p => [p.id, U(p.id)]));
+  if (kind === 'PX') { try { const bytes = buildPX(HX(), units, ctx(), px).build(); await dl.save({ filename: `Lich truc ${PXI[px].short} - ${(h.title || h.name).replace(/[\\/:*?"<>|]/g, '-')}.xlsx`, data: new Blob([bytes]) }); toast('Đã lưu file.'); } catch (e) { if (!e || e.code !== 'declined') toast('Không xuất được file: ' + ((e && (e.message || e.code)) || e)); } return; }
   const fn = { DK01: buildDK01, DK02: buildDK02, DK03: buildDK03, DK06: buildDK06, OT: buildOT }[kind];
   const names = { DK01: 'DK01_Lich truc', DK02: 'DK02_Lich tang cuong huy dong dot xuat', DK03: 'DK03_Lich truc cong xa', DK06: 'DK06_So do tong quan phoi hop cac don vi', OT: 'Tong hop gio lam them' };
   try {

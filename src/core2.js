@@ -257,9 +257,9 @@ function buildDK02(H, units, ctx) {
 }
 
 /* --- DK03: Lịch phục vụ công xa (PX GC-PH) --- */
-function buildDK03(H, units, ctx) {
+function buildDK03(H, units, ctx, wbIn) {
   const u = units['gc-ph']; const D = H.days; const lastC = 3 + D.length;
-  const wb = new XW.Book(); const ws = wb.sheet('Cong xa', { cols: [6, 24, 22, ...D.map(() => 14)], landscape: true });
+  const wb = wbIn || new XW.Book(); const ws = wb.sheet('Cong xa', { cols: [6, 24, 22, ...D.map(() => 14)], landscape: true });
   const half = Math.max(3, Math.floor(lastC / 2));
   ws.merge(1, 1, 1, 3, 'CÔNG TY DỊCH VỤ SỬA CHỮA CÁC\nNHÀ MÁY ĐIỆN EVNGENCO3', { font: { sz: 12 }, h: 'center', v: 'center', wrap: true });
   ws.merge(1, 4, 1, lastC, 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\nĐộc lập - Tự do - Hạnh phúc', { font: { b: true, sz: 12 }, h: 'center', v: 'center', wrap: true }); ws.height(1, 36);
@@ -364,4 +364,73 @@ function buildOT(H, units, ctx) {
   ws.autoHeights(18, 16); return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+/* --- Lịch trực riêng của một phân xưởng --- */
+function buildPX(H, units, ctx, px) {
+  const u = units[px], p = PXI[px], D = H.days; const wb = new XW.Book();
+  const hs = { font: { b: true, sz: 12 }, border: 'thin', h: 'center', v: 'center', wrap: true };
+  const cs = { font: { sz: 12 }, border: 'thin', v: 'center', wrap: true }; const cc = Object.assign({}, cs, { h: 'center' });
+  const head = (ws, last, title) => {
+    const w = ws.cols.slice(0, last); const tot = w.reduce((a, b) => a + b, 0); let acc = 0, sp = 1; for (let i = 0; i < last - 1; i++) { acc += w[i]; sp = i + 1; if (acc >= tot * 0.45) break; }
+    ws.merge(1, 1, 1, sp, 'CÔNG TY DỊCH VỤ SỬA CHỮA CÁC\nNHÀ MÁY ĐIỆN EVNGENCO3', { font: { sz: 12 }, h: 'center', v: 'center', wrap: true }); ws.height(1, 36);
+    ws.merge(2, 1, 2, sp, p.full, { font: { b: true, sz: 12 }, h: 'center', v: 'center', wrap: true }); ws.height(2, 34);
+    ws.merge(1, sp + 1, 1, last, 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\nĐộc lập - Tự do - Hạnh phúc', { font: { b: true, sz: 12 }, h: 'center', v: 'center', wrap: true });
+    ws.merge(2, sp + 1, 2, last, `………, ngày….tháng…..năm ${D.length ? D[0].date.slice(0, 4) : ''}`, { font: { i: true, sz: 12 }, h: 'center', v: 'center' });
+    const lines = title.split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length * 1.25 / Math.max(10, tot))), 0);
+    ws.merge(4, 1, 4, last, title, { font: { b: true, sz: 14 }, h: 'center', v: 'center', wrap: true }); ws.height(4, 22 * lines + 6);
+  };
+  const sign = (ws, r, last) => {
+    ws.merge(r, 1, r, 3, 'NGƯỜI LẬP', { font: { b: true, sz: 12 }, h: 'center' });
+    signBlock(ws, r, Math.max(5, last - 3), last, u.signer && u.signer.title ? u.signer : { title: 'QUẢN ĐỐC', name: '' });
+  };
+  // Sheet 1: lịch ca trực
+  { const last = 9; const ws = wb.sheet('Lich ca truc', { cols: [12, 10, 15, 16, 5, 24, 30, 13, 15], landscape: true });
+    head(ws, last, `LỊCH TRỰC CA CỦA ${p.full}\nTRONG DỊP ${holTitle(H)}`);
+    let r = 6; ['Ngày', 'Ca', 'Thời gian', 'Vị trí', 'STT', 'Họ và tên', 'Chức danh', 'Ghi chú', 'Số điện thoại'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 30); r++;
+    D.forEach(day => {
+      const cb = u.canbo[day.date] && ctx.idx.get(u.canbo[day.date]);
+      const r0 = r;
+      caList(day).forEach(c => {
+        const rc = r;
+        u.groups.forEach((g, gi) => {
+          const k = rkey(day.date, c, gi); const list = ntFirst(u.roster[k] || []); const rg = r;
+          if (!list.length) { ws.set(r, 5, '', cc); ws.set(r, 6, u.follow[k] ? 'Theo lịch trực tăng cường' : '–', Object.assign({}, cs, { font: { sz: 12, i: true } })); [7, 8, 9].forEach(j => ws.set(r, j, '', cs)); r++; }
+          list.forEach((e, i) => { const s = e.sid && ctx.idx.get(e.sid);
+            ws.set(r, 5, i + 1, cc); ws.set(r, 6, personName(e, ctx) + (e.nt ? ' (NT)' : ''), Object.assign({}, cs, { font: { sz: 12, b: !!e.nt } }));
+            ws.set(r, 7, s ? s.title : [e.company, e.trade].filter(Boolean).join(' · '), cs);
+            ws.set(r, 8, e.k === 'eps' ? '' : KINDS[e.k], cc); ws.set(r, 9, personPhone(e, ctx), cc); r++; });
+          ws.merge(rg, 4, r - 1, 4, g ? g.replace(/^tại /, '') : '', cc);
+        });
+        ws.merge(rc, 2, r - 1, 2, c === 'c1' ? 'Ca ngày\n(Ca 1)' : 'Ca đêm\n(Ca 2)', Object.assign({}, cc, { font: { sz: 12, b: true } }));
+        ws.merge(rc, 3, r - 1, 3, c === 'c1' ? '07h00 – 19h00' : '19h00 – 07h00\nhôm sau', cc);
+      });
+      if (px !== 'gc-ph') { ws.set(r, 2, '', cs); ws.merge(r, 2, r, 4, day.ca1 ? 'Cán bộ PX trực (ca ngày tại PX, ca đêm điện thoại)' : 'Cán bộ PX trực (điện thoại)', Object.assign({}, cs, { font: { sz: 12, i: true } }));
+        ws.set(r, 5, '', cs); ws.set(r, 6, cb ? cb.name : '–', Object.assign({}, cs, { font: { sz: 12, b: true } })); ws.set(r, 7, cb ? cb.title : '', cs); ws.set(r, 8, '', cs); ws.set(r, 9, cb ? (ctx.phones[cb.id] || '') : '', cc); r++; }
+      ws.merge(r0, 1, r - 1, 1, `${wdLong(day.date)}\n${dmy(day.date)}`, Object.assign({}, cc, { font: { sz: 12, b: true } }));
+    });
+    r++; ws.merge(r, 1, r, last, 'Ghi chú: Mỗi ca trực 12 giờ. NT: nhóm trưởng. Ca SCTX: ca sửa chữa thường xuyên. Nhóm trưởng báo cho Trưởng ca đương nhiệm số điện thoại liên hệ khi có công tác.', { font: { i: true, sz: 12 }, wrap: true }); r += 2;
+    sign(ws, r, last); ws.autoHeights(18, 16); }
+  // Sheet 2: tăng cường, huy động
+  { const last = 2 + D.length; const ws = wb.sheet('Tang cuong - huy dong', { cols: [16, 8, ...D.map(() => 28)], landscape: true });
+    head(ws, last, `DANH SÁCH TRỰC TĂNG CƯỜNG, HUY ĐỘNG ĐỘT XUẤT CỦA ${p.full}\nTRONG DỊP ${holTitle(H)}`);
+    let r = 6; ws.set(r, 1, 'Danh sách', hs); ws.set(r, 2, 'STT', hs); D.forEach((d, i) => ws.set(r, 3 + i, `${dmy(d.date)} (${wdShort(d.date)})`, hs)); r++;
+    [['tc', 'Trực tăng cường'], ['hd', 'Huy động đột xuất']].forEach(([k, lab]) => {
+      const lists = D.map(d => ntFirst((u[k] || {})[d.date] || [])); const n = Math.max(1, ...lists.map(l => l.length)); const r0 = r;
+      for (let i = 0; i < n; i++) { ws.set(r, 2, i + 1, cc); lists.forEach((l, j) => { const e = l[i];
+        ws.set(r, 3 + j, e ? personLine(e, 0, ctx, true) + (px === 'gc-ph' && e ? `\n(${(u.groups[e.g || 0] || '').replace(/^tại /, 'KV ')}, ${caName(e.c || 'c2')})` : '') : '', cc); }); r++; }
+      ws.merge(r0, 1, r - 1, 1, lab, Object.assign({}, cc, { font: { sz: 12, b: true } }));
+    });
+    r++; ws.merge(r, 1, r, last, 'Ghi chú: Nhân viên trực tăng cường luôn đảm bảo điện thoại liên lạc thông suốt 24/24, có mặt trong vòng 30 phút khi được huy động.', { font: { i: true, sz: 12 }, wrap: true }); r += 2;
+    sign(ws, r, last); ws.autoHeights(18, 16); }
+  // Sheet 3: giờ làm thêm
+  { const last = 10; const ws = wb.sheet('Gio lam them', { cols: [6, 24, 28, 10, 11, 11, 11, 11, 11, 18], landscape: true }); const lim = ctx.org.limits || { month: 40, year: 300 };
+    head(ws, last, `GIỜ LÀM THÊM CỦA NHÂN SỰ TRỰC LỄ – ${p.full}\nTRONG DỊP ${holTitle(H)}`);
+    ws.merge(5, 1, 5, last, `Giới hạn ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Giờ trực lễ 12 giờ/ca; không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
+    let r = 6; ['STT', 'Họ và tên', 'Chức danh', 'Giờ trực lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 34); r++;
+    otRows(u, H, ctx).forEach((x, i) => { const bad = x.level === 'over'; const ns = { font: { sz: 12, b: bad, color: bad ? 'C00000' : '000000' }, border: 'thin', v: 'center', h: 'right' };
+      [i + 1, x.s.name, x.s.title, x.duty, x.m ?? '', x.y ?? '', x.x || 0, x.totM ?? '', x.totY ?? '', [bad ? 'Vượt giới hạn' : '', x.note].filter(Boolean).join('. ')].forEach((v, j) => ws.set(r, j + 1, v, j === 0 ? cc : j <= 2 || j === 9 ? cs : (j >= 7 && j <= 8 ? ns : Object.assign({}, cs, { h: 'right' })))); r++; });
+    r++; sign(ws, r, last); ws.autoHeights(18, 16); }
+  if (px === 'gc-ph') buildDK03(H, units, ctx, wb);
+  return wb;
+}
+
+if (typeof module !== 'undefined') module.exports = { buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };

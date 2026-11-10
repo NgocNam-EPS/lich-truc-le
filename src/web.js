@@ -12,7 +12,8 @@ function toEmail(u) { return String(u).trim().toLowerCase() + EMAIL_DOMAIN; }
 resolveSession = function () { };
 
 /* Tải xuống bằng trình duyệt */
-dl = { save: async ({ filename, data }) => { const b = data instanceof Blob ? data : new Blob([data]); const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return { status: 'saved' }; } };
+const asciiName = n => String(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w .()-]/g, '-');
+dl = { save: async ({ filename, data }) => { filename = asciiName(filename); const b = data instanceof Blob ? data : new Blob([data]); const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return { status: 'saved' }; } };
 
 /* Văn bản lưu trong Firestore, chia nhỏ từng phần 900 KB (không cần gói trả phí) */
 const CHUNK = 900 * 1024;
