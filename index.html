@@ -1244,7 +1244,7 @@ function renderOverlay() {
   const date = kind === 'roster' ? key.split('|')[0] : key; const c = ctx(); const h = H();
   const used = new Map(); caList(h.days.find(d => d.date === date) || {}).forEach(cc => u.groups.forEach((g, gi) => (u.roster[rkey(date, cc, gi)] || []).forEach(e => e.sid && used.set(e.sid, (used.get(e.sid) || []).concat(caName(cc))))));
   const q = S.q.cand.trim().toLowerCase();
-  let pool = S.candAll || q ? STAFF : staffOf(px); if (q) pool = pool.filter(s => (s.name + ' ' + s.id + ' ' + s.title + ' ' + s.dept).toLowerCase().includes(q));
+  let pool = S.candAll ? STAFF : staffOf(px); if (q) pool = pool.filter(s => (s.name + ' ' + s.id + ' ' + s.title + ' ' + s.dept).toLowerCase().includes(q));
   const inList = new Set(list.map(e => e.sid).filter(Boolean));
   const duty = dutyMap(u, h, S.org);
   pool = pool.filter(s => !inList.has(s.id)).slice(0, 120);
