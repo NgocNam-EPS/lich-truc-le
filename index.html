@@ -1572,6 +1572,13 @@ const decStaff = list => (list || []).map(r => typeof r === 'string' ? r.split('
 function setStaff(raw, src) { STAFF = toStaff(decStaff(raw)); IDX = new Map(STAFF.map(s => [s.id, s])); S.staffSource = src || ''; }
 function toEmail(u) { return String(u).trim().toLowerCase() + EMAIL_DOMAIN; }
 resolveSession = function () { };
+const _paintSave = paintSave;
+paintSave = function () { const el = E('save'); if (el && S.saveState === 'connecting') { el.className = 'save saving'; el.querySelector('span').textContent = 'Đang kết nối…'; return; } _paintSave(); };
+viewNoHoliday = function () {
+  if (S.mode === 'db' && S.me && !S.synced) return `<div class="card stack" style="align-items:flex-start"><h2>${S.syncErr ? 'Không tải được dữ liệu' : 'Đang tải dữ liệu…'}</h2><p class="hint">${S.syncErr ? esc(S.syncErr) + '. ' : ''}Nếu chờ lâu, kiểm tra mạng rồi bấm Tải lại.</p><button class="btn" data-act="reloadPage">Tải lại</button></div>`;
+  return `<div class="card stack" style="align-items:flex-start"><h2>Chưa có dịp lễ nào</h2><p class="hint">${isAdmin() ? 'Tạo dịp lễ để các phân xưởng bắt đầu nhập lịch trực.' : 'Quản trị chưa mở dịp lễ nào để nhập lịch. Hãy liên hệ Phòng KT-AT.'}</p>${isAdmin() ? '<button class="btn primary" data-act="tab" data-v="holiday">Tạo dịp lễ</button>' : '<button class="btn" data-act="reloadPage">Tải lại</button>'}</div>`;
+};
+ACT.reloadPage = () => location.reload();
 
 /* Tải xuống bằng trình duyệt */
 const asciiName = n => String(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w .()-]/g, '-');
@@ -1750,16 +1757,21 @@ async function onAuth(user) {
     S.loginNote = ''; S.me = isOwner ? { role: 'owner', u: (role && role.u) || 'owner', name: (role && role.name) || 'Chủ sở hữu' } : { role: role.role, px: role.px, u: role.u, name: role.name };
   } catch (x) { S.loginNote = 'Không đọc được quyền tài khoản: ' + (x.message || x.code); await fbAuth.signOut(); return; }
   S.mode = 'db'; S.tab = defaultTab(); ast = S.me.role === 'viewer' ? null : makeAst();
-  const err = x => setSave('error', x && (x.message || x.code));
-  subs.push(db.doc('staff/main').onSnapshot(d => { const v = d.exists ? d.data() : null; setStaff(v ? v.list : [], v ? v.source : ''); render(); }, err));
-  subs.push(db.collection('holidays').onSnapshot(snap => { const next = {}; snap.docs.forEach(d => { next[d.id] = pend.has('holidays/' + d.id) ? S.holidays[d.id] : clone(d.data()); });
+  S.synced = false; S.syncErr = '';
+  const err = x => { S.syncErr = (x && (x.code === 'permission-denied' ? 'Tài khoản không có quyền đọc dữ liệu.' : (x.message || x.code))) || 'Lỗi kết nối'; setSave('error', S.syncErr); render(); };
+  const applyHolidays = snap => { const next = {}; snap.docs.forEach(d => { next[d.id] = pend.has('holidays/' + d.id) ? S.holidays[d.id] : clone(d.data()); });
     Object.keys(S.holidays).forEach(id => { if (pend.has('holidays/' + id) && S.holidays[id]) next[id] = S.holidays[id]; });
-    S.holidays = next; const before = S.cur; ensureCur(); if (S.cur && before === S.cur && !unitsUnsub) subUnits(); render(); }, err));
+    S.holidays = next; S.synced = true; S.syncErr = ''; if (S.saveState === 'connecting') setSave('idle'); const before = S.cur; ensureCur(); if (S.cur && before === S.cur && !unitsUnsub) subUnits(); render(); };
+  subs.push(db.doc('staff/main').onSnapshot(d => { const v = d.exists ? d.data() : null; setStaff(v ? v.list : [], v ? v.source : ''); render(); }, err));
+  subs.push(db.collection('holidays').onSnapshot(applyHolidays, err));
+  // Dự phòng: nếu kênh cập nhật trực tiếp chậm (mạng di động), đọc trực tiếp một lần
+  const uidNow = user.uid; setTimeout(async () => { if (S.synced || CURRENT_UID !== uidNow) return;
+    try { applyHolidays(await db.collection('holidays').get()); const st = await db.doc('staff/main').get(); if (st.exists) { setStaff(st.data().list, st.data().source); render(); } } catch (x) { err(x); } }, 6000);
   subs.push(db.doc('org/main').onSnapshot(d => { if (d.exists && !pend.has('org/main')) { S.org = Object.assign(clone(DEFAULT_ORG), clone(d.data())); render(); } }, () => { }));
   subs.push(db.collection('phones').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('phones/' + d.id) ? S.phones[d.id] : clone(d.data())); S.phones = n; if (!S.panel) render(); }, () => { }));
   subs.push(db.collection('outside').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('outside/' + d.id) ? S.outside[d.id] : clone(d.data())); S.outside = n; if (!S.panel) render(); }, () => { }));
   if (S.me.role === 'owner') subs.push(db.collection('roles').onSnapshot(snap => { S.roles = snap.docs.map(d => Object.assign({ uid: d.id }, d.data())).sort((a, b) => (a.at || 0) - (b.at || 0)); if (S.tab === 'accounts') render(); }, () => { }));
-  setSave('idle'); render();
+  setSave('connecting'); render();
 }
 async function webBoot() {
   render();
@@ -1768,6 +1780,8 @@ async function webBoot() {
     E('main').innerHTML = `<div class="card stack"><h2>Chưa cấu hình Firebase</h2><p class="hint">Mở tệp <b>firebase-config.js</b> trong repository và dán cấu hình dự án Firebase (xem README.md).</p></div>`; return;
   }
   fbApp = firebase.initializeApp(cfg); fbAuth = firebase.auth(); db = firebase.firestore();
+  // Mạng di động/iPhone đôi khi chặn kênh trực tiếp: tự chuyển sang chế độ hỏi định kỳ
+  try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) { }
   // Không lưu bản sao dữ liệu trên máy (an toàn cho máy dùng chung)
   try { const m = await db.doc('config/meta').get(); S.noOwner = !m.exists; } catch (e) { S.noOwner = false; }
   S.mode = 'db'; S.authReady = true;
