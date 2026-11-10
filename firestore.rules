@@ -1,0 +1,56 @@
+rules_version = '2';
+// Quy tắc bảo mật cho ứng dụng Lịch trực lễ EPS.
+// Dán toàn bộ nội dung này vào Firebase console → Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function metaPath() { return /databases/$(database)/documents/config/meta; }
+    function rolePath() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
+    function isOwner() { return signedIn() && exists(metaPath()) && get(metaPath()).data.owner == request.auth.uid; }
+    function hasRole() { return signedIn() && exists(rolePath()); }
+    function role() { return get(rolePath()).data; }
+    function isAdmin() { return isOwner() || (hasRole() && role().role == 'admin'); }
+    function isLead() { return hasRole() && role().role == 'lead'; }
+    function isViewer() { return hasRole() && role().role == 'viewer'; }
+    function pxIs(px) { return hasRole() && role().role == 'px' && role().px == px; }
+    function member() { return isOwner() || hasRole(); }
+    function okStatus() { return !('status' in request.resource.data) || request.resource.data.status in ['draft', 'submitted'] || (resource != null && resource.data.get('status', '') == request.resource.data.status); }
+
+    // Chủ sở hữu: tạo một lần khi thiết lập lần đầu
+    match /config/meta {
+      allow read: if true;
+      allow create: if signedIn() && !exists(metaPath()) && request.resource.data.owner == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // Vai trò từng tài khoản: chỉ chủ sở hữu cấp và thu hồi
+    match /roles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner();
+    }
+    match /staff/{d} { allow read: if member(); allow write: if isAdmin(); }
+    match /org/{d} { allow read: if member(); allow write: if isAdmin(); }
+    match /phones/{k} { allow read: if member(); allow write: if isAdmin() || pxIs(k) || (isLead() && k == 'other'); }
+    match /outside/{k} { allow read: if member(); allow write: if isAdmin() || pxIs(k); }
+    match /holidays/{h} {
+      allow read: if member();
+      allow write: if isAdmin();
+      // Phân xưởng và Phòng KT-AT chỉ sửa phần của mình, không tự duyệt
+      match /units/{u} {
+        allow read: if member();
+        allow write: if isAdmin() || ((pxIs(u) || (u == 'lead' && isLead())) && okStatus());
+      }
+      match /files/{f} {
+        allow read: if member();
+        allow create: if isAdmin() || (isLead() && request.resource.data.cat != 4) || (request.resource.data.cat == 4 && pxIs(request.resource.data.px));
+        allow update: if isAdmin();
+        allow delete: if isAdmin() || resource.data.uid == request.auth.uid;
+      }
+    }
+    // Nội dung tệp văn bản (chia nhỏ)
+    match /filedata/{c} {
+      allow read: if member();
+      allow create, delete: if member() && !isViewer();
+      allow update: if false;
+    }
+  }
+}
