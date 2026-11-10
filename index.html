@@ -397,8 +397,8 @@ function otRows(u, H, ctx) {
     const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
     const m = num(o.m), y = num(o.y), x = num(o.x) || 0;
     const totM = m == null ? null : m + d.h + x, totY = y == null ? null : y + d.h + x;
-    let level = 'ok'; if (m == null || y == null) level = 'missing';
-    else if (totM > lim.month || totY > lim.year) level = 'over'; else if (totM >= lim.month * 0.8 || totY >= lim.year * 0.9) level = 'near';
+    let level = 'ok';
+    if ((totM != null && totM > lim.month) || (totY != null && totY > lim.year)) level = 'over'; else if (m == null || y == null) level = 'missing'; else if (totM >= lim.month * 0.8 || totY >= lim.year * 0.9) level = 'near';
     return { sid, s, duty: d.h, items: d.items, m, y, x, totM, totY, level, note: o.note || '' };
   }).sort((a, b) => (b.totY || 0) - (a.totY || 0));
 }
@@ -419,7 +419,7 @@ function checkUnit(u, H, ctx) {
     if (p.id !== 'gc-ph' && !u.canbo[day.date]) warn.push(`Chưa chọn cán bộ phân xưởng trực ngày ${dmy(day.date)}`);
   });
   const rows = otRows(u, H, ctx);
-  const miss = rows.filter(r => r.level === 'missing'); if (miss.length) err.push(`${miss.length} người chưa nhập giờ làm thêm lũy kế (tháng và năm)`);
+  const miss = rows.filter(r => r.m == null || r.y == null); if (miss.length) err.push(`${miss.length} người chưa nhập giờ làm thêm lũy kế (tháng và năm)`);
   const over = rows.filter(r => r.level === 'over'); if (over.length) warn.push(`${over.length} người vượt giới hạn giờ làm thêm`);
   return { err, warn, rows };
 }
@@ -954,9 +954,13 @@ function viewCongXa(px, u, h, ed) {
 function otBadge(r) { return r.level === 'over' ? '<span class="pill returned">Vượt giới hạn</span>' : r.level === 'near' ? '<span class="pill submitted">Sát giới hạn</span>' : r.level === 'missing' ? '<span class="pill draft">Chưa nhập</span>' : '<span class="pill approved">Trong giới hạn</span>'; }
 function viewOt(px, u, h, ed) {
   const rows = otRows(u, h, ctx()); const lim = S.org.limits || { month: 40, year: 300 }; const dis = ed ? '' : 'disabled';
-  const mon = h.days.length ? `tháng ${+h.days[h.days.length - 1].date.slice(5, 7)}` : 'tháng';
+  const mon = h.days.length ? `tháng ${+h.days[0].date.slice(5, 7)}` : 'tháng';
   return `<section class="card stack"><h2>Giờ làm thêm của nhân sự trực lễ</h2>
-    <p class="hint">Nhập số giờ làm thêm <b>đã có đến trước dịp lễ</b> của từng người: lũy kế ${mon} và lũy kế năm ${h.days.length ? h.days[0].date.slice(0, 4) : ''}. Ứng dụng tự cộng giờ trực lễ (${(S.org.hours || {}).ca || 12} giờ/ca; cán bộ PX trực ca ngày ${(S.org.hours || {}).canboDay ?? 12} giờ) và cảnh báo khi vượt ${lim.month} giờ/tháng hoặc ${lim.year} giờ/năm. Danh sách gồm người trong lịch ca trực, cán bộ trực, tăng cường và huy động.</p>
+    <p class="hint">Nhập số giờ làm thêm <b>đã có đến trước dịp lễ</b> của từng người. Ứng dụng tự cộng giờ trực lễ (${(S.org.hours || {}).ca || 12} giờ/ca; cán bộ PX trực ca ngày ${(S.org.hours || {}).canboDay ?? 12} giờ). Danh sách gồm người trong lịch ca trực, cán bộ trực, tăng cường và huy động.</p>
+    ${(() => { const d0 = h.days.length ? h.days[0].date : ''; const [yy, mm] = d0 ? d0.split('-') : ['', '']; return d0 ? `<div class="notice stack" style="gap:4px">
+      <span><b>Lũy kế tháng ${+mm}:</b> tổng giờ làm thêm từ ngày 01/${mm}/${yy} đến trước ngày trực lễ (${dm(d0)}). Dùng để so với giới hạn ${lim.month} giờ/tháng.</span>
+      <span><b>Lũy kế năm:</b> tổng giờ làm thêm từ 01/01/${yy} đến trước ngày trực lễ, đã bao gồm cả tháng ${+mm}. Dùng để so với giới hạn ${lim.year} giờ/năm.</span>
+      <span>Người chưa làm thêm thì ghi <b>0</b>, không để trống.</span></div>` : ''; })()}
     ${rows.length ? `<div class="tbl scroll"><table class="list"><thead><tr><th>Họ và tên</th><th>Chức danh</th><th class="num">Giờ trực lễ</th><th class="num">Lũy kế ${mon}</th><th class="num">Lũy kế năm</th><th class="num">Phát sinh khác</th><th class="num">Tổng tháng</th><th class="num">Tổng năm</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead><tbody>
     ${rows.map(r => `<tr class="${r.level === 'over' ? 'over' : r.level === 'near' ? 'near' : ''}"><td><b>${esc(r.s.name)}</b><br><span class="hint">${esc(r.sid)}</span></td><td>${esc(r.s.title)}</td>
       <td class="num" title="${esc(r.items.join(', '))}">${r.duty}</td>

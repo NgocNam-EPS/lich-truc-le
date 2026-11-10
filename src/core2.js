@@ -95,8 +95,8 @@ function otRows(u, H, ctx) {
     const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
     const m = num(o.m), y = num(o.y), x = num(o.x) || 0;
     const totM = m == null ? null : m + d.h + x, totY = y == null ? null : y + d.h + x;
-    let level = 'ok'; if (m == null || y == null) level = 'missing';
-    else if (totM > lim.month || totY > lim.year) level = 'over'; else if (totM >= lim.month * 0.8 || totY >= lim.year * 0.9) level = 'near';
+    let level = 'ok';
+    if ((totM != null && totM > lim.month) || (totY != null && totY > lim.year)) level = 'over'; else if (m == null || y == null) level = 'missing'; else if (totM >= lim.month * 0.8 || totY >= lim.year * 0.9) level = 'near';
     return { sid, s, duty: d.h, items: d.items, m, y, x, totM, totY, level, note: o.note || '' };
   }).sort((a, b) => (b.totY || 0) - (a.totY || 0));
 }
@@ -117,7 +117,7 @@ function checkUnit(u, H, ctx) {
     if (p.id !== 'gc-ph' && !u.canbo[day.date]) warn.push(`Chưa chọn cán bộ phân xưởng trực ngày ${dmy(day.date)}`);
   });
   const rows = otRows(u, H, ctx);
-  const miss = rows.filter(r => r.level === 'missing'); if (miss.length) err.push(`${miss.length} người chưa nhập giờ làm thêm lũy kế (tháng và năm)`);
+  const miss = rows.filter(r => r.m == null || r.y == null); if (miss.length) err.push(`${miss.length} người chưa nhập giờ làm thêm lũy kế (tháng và năm)`);
   const over = rows.filter(r => r.level === 'over'); if (over.length) warn.push(`${over.length} người vượt giới hạn giờ làm thêm`);
   return { err, warn, rows };
 }
