@@ -40,7 +40,7 @@ Quyền được kiểm tra trên máy chủ bằng `firestore.rules`: phân xư
 4. Quản trị duyệt hoặc trả lại.
 5. Đủ 8/8 đơn vị đã duyệt: xuất các file Excel để in ký.
 
-Giờ làm thêm chỉ tính cho nhân sự EPS (không tính Ca SCTX và người thuê ngoài), cảnh báo khi vượt 40 giờ/tháng hoặc 300 giờ/năm.
+Giờ làm thêm chỉ tính cho nhân sự EPS (không tính Ca SCTX và người thuê ngoài): mỗi ca trực 12 giờ tính 10,5 giờ làm thêm, riêng ca đêm đầu tiên của dịp lễ tính 2,5 giờ (chỉnh được ở tab Nội dung in & sơ đồ). Ứng dụng cảnh báo khi vượt 40 giờ/tháng hoặc 300 giờ/năm.
 
 ## Giới hạn gói miễn phí
 
