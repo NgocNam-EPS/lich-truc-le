@@ -187,7 +187,7 @@ ACT.importStaff = async () => {
 function unsubAll() { subs.forEach(f => { try { f(); } catch (e) { } }); subs = []; if (unitsUnsub) { unitsUnsub(); unitsUnsub = null; } if (filesUnsub) { filesUnsub(); filesUnsub = null; } }
 async function onAuth(user) {
   unsubAll(); CURRENT_UID = user ? user.uid : null; window.CURRENT_UID = CURRENT_UID;
-  if (!user) { S.me = null; S.tab = null; S.holidays = {}; S.units = {}; S.files = {}; S.roles = []; setStaff([], ''); render(); return; }
+  if (!user) { S.me = null; S.tab = null; S.projects = {}; S.holidays = {}; S.units = {}; S.files = {}; S.roles = []; setStaff([], ''); render(); return; }
   try {
     const [m, r] = await Promise.all([db.doc('config/meta').get(), db.doc('roles/' + user.uid).get()]);
     const isOwner = m.exists && m.data().owner === user.uid; const role = r.exists ? r.data() : null;
@@ -207,6 +207,7 @@ async function onAuth(user) {
     try { applyHolidays(await db.collection('holidays').get()); const st = await db.doc('staff/main').get(); if (st.exists) { setStaff(st.data().list, st.data().source); render(); } } catch (x) { err(x); } }, 6000);
   subs.push(db.doc('org/main').onSnapshot(d => { if (d.exists && !pend.has('org/main')) { S.org = Object.assign(clone(DEFAULT_ORG), clone(d.data())); render(); } }, () => { }));
   subs.push(db.collection('phones').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('phones/' + d.id) ? S.phones[d.id] : clone(d.data())); S.phones = n; if (!S.panel) render(); }, () => { }));
+  subs.push(db.collection('projects').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('projects/' + d.id) ? S.projects[d.id] : clone(d.data())); S.projects = n; if (!S.panel) render(); }, () => { }));
   subs.push(db.collection('outside').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('outside/' + d.id) ? S.outside[d.id] : clone(d.data())); S.outside = n; if (!S.panel) render(); }, () => { }));
   if (S.me.role === 'owner') subs.push(db.collection('roles').onSnapshot(snap => { S.roles = snap.docs.map(d => Object.assign({ uid: d.id }, d.data())).sort((a, b) => (a.at || 0) - (b.at || 0)); if (S.tab === 'accounts') render(); }, () => { }));
   setSave('connecting'); render();

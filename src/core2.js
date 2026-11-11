@@ -10,6 +10,9 @@ const PX = [
 ];
 const PXI = Object.fromEntries(PX.map(p => [p.id, p]));
 const KINDS = { eps: 'Nhân sự EPS', sctx: 'Ca SCTX', thue: 'Thuê ngoài', os: 'Outsource' };
+const PRJ_TYPES = { SCL: 'Sửa chữa lớn', SXK: 'Sản xuất khác', SCTX: 'Sửa chữa thường xuyên' };
+function prjOn(ctx, sid, date) { return (ctx.projects || []).filter(p => p.from && p.from <= date && (!p.to || p.to >= date) && (p.members || []).some(m => m.sid === sid)); }
+function prjStatus(p, today) { if (p.from && today < p.from) return 'sap'; if (p.to && today > p.to) return 'xong'; return 'dang'; }
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 function toStaff(raw) { return raw.map(r => ({ id: r[0], name: r[1], year: r[2], gender: r[3], title: r[4], dept: r[5], cat: r[6] })); }
@@ -113,6 +116,7 @@ function checkUnit(u, H, ctx) {
       if (list.length && !list.some(e => e.nt)) warn.push(`Chưa chọn nhóm trưởng (NT) ${where}`);
       list.forEach(e => { if (e.sid) { perCa[e.sid] = perCa[e.sid] || new Set(); perCa[e.sid].add(c); } });
     }));
+    Object.keys(perCa).forEach(sid => prjOn(ctx, sid, day.date).forEach(pj => warn.push(`${(ctx.idx.get(sid) || {}).name || sid} đang tham gia công trình ${pj.type} "${pj.name}" ngày ${dmy(day.date)}`)));
     Object.entries(perCa).forEach(([sid, set]) => { if (set.size > 1) warn.push(`${(ctx.idx.get(sid) || {}).name || sid} trực cả 2 ca ngày ${dmy(day.date)} (24 giờ liên tục)`); });
     if (p.id !== 'gc-ph' && !u.canbo[day.date]) warn.push(`Chưa chọn cán bộ phân xưởng trực ngày ${dmy(day.date)}`);
   });
@@ -433,4 +437,34 @@ function buildPX(H, units, ctx, px) {
   return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+/* --- Danh sách nhân sự thực hiện các công trình --- */
+function buildPRJ(ctx, pxFilter) {
+  const wb = new XW.Book(); const last = 11;
+  const ws = wb.sheet('Cong trinh', { cols: [5, 12, 30, 8, 18, 20, 5, 32, 11, 28, 14], landscape: true });
+  const hs = { font: { b: true, sz: 12 }, border: 'thin', h: 'center', v: 'center', wrap: true };
+  const cs = { font: { sz: 12 }, border: 'thin', v: 'center', wrap: true }; const cc = Object.assign({}, cs, { h: 'center' });
+  head3(ws, ctx.org, 1, 4);
+  ws.merge(1, 7, 1, last, 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', { font: { b: true, sz: 12 }, h: 'center' });
+  ws.merge(2, 7, 2, last, 'Độc lập - Tự do - Hạnh phúc', { font: { b: true, sz: 12 }, h: 'center' });
+  const today = new Date(); const ymd = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+  ws.merge(5, 1, 5, last, `DANH SÁCH NHÂN SỰ THỰC HIỆN CÁC CÔNG TRÌNH SCL, SXK, SCTX${pxFilter ? '\n' + PXI[pxFilter].full : ''}`, { font: { b: true, sz: 14 }, h: 'center', v: 'center', wrap: true }); ws.height(5, pxFilter ? 44 : 24);
+  ws.merge(6, 1, 6, last, `(Cập nhật đến ngày ${ymd}. SCL: sửa chữa lớn; SXK: sản xuất khác; SCTX: sửa chữa thường xuyên)`, { font: { i: true, sz: 12 }, h: 'center' });
+  let r = 8; ['STT', 'Phân xưởng', 'Tên công trình', 'Loại', 'Địa điểm', 'Thời gian thực hiện', 'TT', 'Họ và tên', 'Số hiệu', 'Chức danh / đơn vị', 'Số điện thoại'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 34); r++;
+  const list = (ctx.projects || []).filter(p => !pxFilter || p.px === pxFilter).sort((a, b) => PX.findIndex(x => x.id === a.px) - PX.findIndex(x => x.id === b.px) || (a.from || '').localeCompare(b.from || ''));
+  list.forEach((p, i) => {
+    const ms = ntFirst(p.members || []); const r0 = r;
+    if (!ms.length) { [7, 8, 9, 10, 11].forEach(j => ws.set(r, j, j === 8 ? '(chưa có nhân sự)' : '', j === 8 ? Object.assign({}, cs, { font: { sz: 12, i: true } }) : cs)); r++; }
+    ms.forEach((m, j) => { const s = m.sid && ctx.idx.get(m.sid);
+      ws.set(r, 7, j + 1, cc); ws.set(r, 8, personName(m, ctx) + (m.nt ? ' (Trưởng nhóm)' : ''), Object.assign({}, cs, { font: { sz: 12, b: !!m.nt } }));
+      ws.set(r, 9, s ? s.id : '', cc); ws.set(r, 10, s ? s.title + (PXI[p.px] && s.dept !== PXI[p.px].dept ? ' (' + s.dept + ')' : '') : ['Thuê ngoài', m.company, m.trade].filter(Boolean).join(' · '), cs); ws.set(r, 11, personPhone(m, ctx), cc); r++; });
+    ws.merge(r0, 1, r - 1, 1, i + 1, cc); ws.merge(r0, 2, r - 1, 2, (PXI[p.px] || {}).short || p.px, cc);
+    ws.merge(r0, 3, r - 1, 3, p.name + (p.note ? '\n(' + p.note + ')' : ''), Object.assign({}, cs, { font: { sz: 12, b: true } }));
+    ws.merge(r0, 4, r - 1, 4, p.type, cc); ws.merge(r0, 5, r - 1, 5, p.site || '', cc);
+    ws.merge(r0, 6, r - 1, 6, `${p.from ? dmy(p.from) : '…'} – ${p.to ? dmy(p.to) : '…'}`, cc);
+  });
+  if (!list.length) { ws.merge(r, 1, r, last, 'Chưa có công trình.', Object.assign({}, cs, { font: { sz: 12, i: true } })); r++; }
+  r++; signBlock(ws, r, last - 3, last, { title: pxFilter ? 'QUẢN ĐỐC' : 'PHÒNG KỸ THUẬT - AN TOÀN', name: '' });
+  ws.autoHeights(18, 16); return wb;
+}
+
+if (typeof module !== 'undefined') module.exports = { buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };

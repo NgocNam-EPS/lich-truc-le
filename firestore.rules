@@ -31,6 +31,8 @@ service cloud.firestore {
     match /org/{d} { allow read: if member(); allow write: if isAdmin(); }
     match /phones/{k} { allow read: if member(); allow write: if isAdmin() || pxIs(k) || (isLead() && k == 'other'); }
     match /outside/{k} { allow read: if member(); allow write: if isAdmin() || pxIs(k); }
+    // Công trình SCL, SXK, SCTX: mỗi phân xưởng sửa danh sách của mình
+    match /projects/{k} { allow read: if member(); allow write: if isAdmin() || pxIs(k); }
     match /holidays/{h} {
       allow read: if member();
       allow write: if isAdmin();
