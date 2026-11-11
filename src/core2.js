@@ -62,15 +62,19 @@ function personLine(e, n, ctx, withPhone) {
 const ntFirst = arr => arr.slice().sort((a, b) => (b.nt ? 1 : 0) - (a.nt ? 1 : 0));
 
 /* ===== Giờ trực lễ và giờ làm thêm ===== */
+/* Giờ làm thêm tính cho mỗi ca trực 12 giờ: mặc định 10,5 giờ; ca đêm đầu tiên của dịp lễ: 2,5 giờ */
+function otHours(org) { const h = (org && org.hours) || {}; const n = (v, d) => (v === '' || v == null || isNaN(+v)) ? d : +v; const ca = n(h.otCa, 10.5); return { ca, first: n(h.otFirst, 2.5), canbo: n(h.otCanbo, ca), phone: n(h.phoneNight, 0) }; }
+function shiftOt(H, day, c, org) { const o = otHours(org); return (c === 'c2' && H.days.length && day.date === H.days[0].date) ? o.first : o.ca; }
+const fh = v => v == null || v === '' ? '–' : String(Math.round(+v * 100) / 100).replace('.', ',');
 function dutyMap(u, H, org) {
-  const hrs = org.hours || { ca: 12, canboDay: 12, phoneNight: 0 }; const m = new Map();
-  const add = (sid, h, label) => { if (!sid) return; const x = m.get(sid) || { h: 0, items: [] }; x.h += h; x.items.push(label); m.set(sid, x); };
+  const o = otHours(org); const m = new Map();
+  const add = (sid, h, label) => { if (!sid) return; const x = m.get(sid) || { h: 0, items: [] }; x.h += h; x.items.push(`${label}: ${fh(h)} giờ`); m.set(sid, x); };
   H.days.forEach(day => {
     caList(day).forEach(c => (u.groups || ['']).forEach((g, gi) => ((u.roster || {})[rkey(day.date, c, gi)] || []).forEach(e => {
-      if (e.k === 'eps' && e.sid) add(e.sid, +hrs.ca || 12, `${dm(day.date)} ${caName(c)}`);
+      if (e.k === 'eps' && e.sid) add(e.sid, shiftOt(H, day, c, org), `${dm(day.date)} ${caName(c)}`);
     })));
     const cb = (u.canbo || {})[day.date];
-    if (cb) { if (day.ca1) add(cb, +hrs.canboDay || 0, `${dm(day.date)} cán bộ trực ca ngày`); if (day.ca2 && +hrs.phoneNight) add(cb, +hrs.phoneNight, `${dm(day.date)} trực điện thoại đêm`); }
+    if (cb) { if (day.ca1 && o.canbo) add(cb, o.canbo, `${dm(day.date)} cán bộ trực ca ngày`); if (day.ca2 && o.phone) add(cb, o.phone, `${dm(day.date)} trực điện thoại đêm`); }
   });
   return m;
 }
@@ -354,9 +358,9 @@ function buildOT(H, units, ctx) {
   const lim = ctx.org.limits || { month: 40, year: 300 }; const last = 12;
   head3(ws, ctx.org, 1, 4);
   ws.merge(5, 1, 5, last, `TỔNG HỢP GIỜ LÀM THÊM NHÂN SỰ TRỰC ${holTitle(H)}`, { font: { b: true, sz: 14 }, h: 'center', v: 'center', wrap: true });
-  ws.merge(6, 1, 6, last, `Giới hạn: ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Chỉ tính nhân sự EPS; giờ trực lễ 12 giờ/ca (ca ngày 07h00–19h00, ca đêm 19h00–07h00); không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
+  ws.merge(6, 1, 6, last, `Giới hạn: ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Chỉ tính nhân sự EPS. Mỗi ca trực 12 giờ (ca ngày 07h00–19h00, ca đêm 19h00–07h00) tính ${fh(otHours(ctx.org).ca)} giờ làm thêm; ca đêm đầu tiên tính ${fh(otHours(ctx.org).first)} giờ. Không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
   const hs = { font: { b: true, sz: 12 }, border: 'thin', h: 'center', v: 'center', wrap: true };
-  ['STT', 'Họ và tên', 'Số hiệu', 'Chức danh', 'Đơn vị', 'Giờ trực lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(8, i + 1, t, hs)); ws.height(8, 34);
+  ['STT', 'Họ và tên', 'Số hiệu', 'Chức danh', 'Đơn vị', 'Giờ làm thêm dịp lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(8, i + 1, t, hs)); ws.height(8, 34);
   let r = 9, n = 0; const cs = { font: { sz: 12 }, border: 'thin', v: 'center', wrap: true }; const ns = { font: { sz: 12 }, border: 'thin', v: 'center', h: 'right' };
   PX.forEach(p => otRows(units[p.id], H, ctx).forEach(x => {
     n++; const warn = x.level === 'over' ? 'VƯỢT GIỚI HẠN' : x.level === 'missing' ? 'Thiếu số liệu' : '';
@@ -428,8 +432,8 @@ function buildPX(H, units, ctx, px) {
   // Sheet 3: giờ làm thêm
   { const last = 10; const ws = wb.sheet('Gio lam them', { cols: [6, 24, 28, 10, 11, 11, 11, 11, 11, 18], landscape: true }); const lim = ctx.org.limits || { month: 40, year: 300 };
     head(ws, last, `GIỜ LÀM THÊM CỦA NHÂN SỰ TRỰC LỄ – ${p.full}\nTRONG DỊP ${holTitle(H)}`);
-    ws.merge(5, 1, 5, last, `Giới hạn ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Giờ trực lễ 12 giờ/ca; không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
-    let r = 6; ['STT', 'Họ và tên', 'Chức danh', 'Giờ trực lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 34); r++;
+    ws.merge(5, 1, 5, last, `Giới hạn ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Mỗi ca trực 12 giờ tính ${fh(otHours(ctx.org).ca)} giờ làm thêm; ca đêm đầu tiên tính ${fh(otHours(ctx.org).first)} giờ. Không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
+    let r = 6; ['STT', 'Họ và tên', 'Chức danh', 'Giờ làm thêm dịp lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 34); r++;
     otRows(u, H, ctx).forEach((x, i) => { const bad = x.level === 'over'; const ns = { font: { sz: 12, b: bad, color: bad ? 'C00000' : '000000' }, border: 'thin', v: 'center', h: 'right' };
       [i + 1, x.s.name, x.s.title, x.duty, x.m ?? '', x.y ?? '', x.x || 0, x.totM ?? '', x.totY ?? '', [bad ? 'Vượt giới hạn' : '', x.note].filter(Boolean).join('. ')].forEach((v, j) => ws.set(r, j + 1, v, j === 0 ? cc : j <= 2 || j === 9 ? cs : (j >= 7 && j <= 8 ? ns : Object.assign({}, cs, { h: 'right' })))); r++; });
     r++; sign(ws, r, last); ws.autoHeights(18, 16); }
@@ -467,4 +471,4 @@ function buildPRJ(ctx, pxFilter) {
   ws.autoHeights(18, 16); return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };

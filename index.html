@@ -364,15 +364,19 @@ function personLine(e, n, ctx, withPhone) {
 const ntFirst = arr => arr.slice().sort((a, b) => (b.nt ? 1 : 0) - (a.nt ? 1 : 0));
 
 /* ===== Giờ trực lễ và giờ làm thêm ===== */
+/* Giờ làm thêm tính cho mỗi ca trực 12 giờ: mặc định 10,5 giờ; ca đêm đầu tiên của dịp lễ: 2,5 giờ */
+function otHours(org) { const h = (org && org.hours) || {}; const n = (v, d) => (v === '' || v == null || isNaN(+v)) ? d : +v; const ca = n(h.otCa, 10.5); return { ca, first: n(h.otFirst, 2.5), canbo: n(h.otCanbo, ca), phone: n(h.phoneNight, 0) }; }
+function shiftOt(H, day, c, org) { const o = otHours(org); return (c === 'c2' && H.days.length && day.date === H.days[0].date) ? o.first : o.ca; }
+const fh = v => v == null || v === '' ? '–' : String(Math.round(+v * 100) / 100).replace('.', ',');
 function dutyMap(u, H, org) {
-  const hrs = org.hours || { ca: 12, canboDay: 12, phoneNight: 0 }; const m = new Map();
-  const add = (sid, h, label) => { if (!sid) return; const x = m.get(sid) || { h: 0, items: [] }; x.h += h; x.items.push(label); m.set(sid, x); };
+  const o = otHours(org); const m = new Map();
+  const add = (sid, h, label) => { if (!sid) return; const x = m.get(sid) || { h: 0, items: [] }; x.h += h; x.items.push(`${label}: ${fh(h)} giờ`); m.set(sid, x); };
   H.days.forEach(day => {
     caList(day).forEach(c => (u.groups || ['']).forEach((g, gi) => ((u.roster || {})[rkey(day.date, c, gi)] || []).forEach(e => {
-      if (e.k === 'eps' && e.sid) add(e.sid, +hrs.ca || 12, `${dm(day.date)} ${caName(c)}`);
+      if (e.k === 'eps' && e.sid) add(e.sid, shiftOt(H, day, c, org), `${dm(day.date)} ${caName(c)}`);
     })));
     const cb = (u.canbo || {})[day.date];
-    if (cb) { if (day.ca1) add(cb, +hrs.canboDay || 0, `${dm(day.date)} cán bộ trực ca ngày`); if (day.ca2 && +hrs.phoneNight) add(cb, +hrs.phoneNight, `${dm(day.date)} trực điện thoại đêm`); }
+    if (cb) { if (day.ca1 && o.canbo) add(cb, o.canbo, `${dm(day.date)} cán bộ trực ca ngày`); if (day.ca2 && o.phone) add(cb, o.phone, `${dm(day.date)} trực điện thoại đêm`); }
   });
   return m;
 }
@@ -656,9 +660,9 @@ function buildOT(H, units, ctx) {
   const lim = ctx.org.limits || { month: 40, year: 300 }; const last = 12;
   head3(ws, ctx.org, 1, 4);
   ws.merge(5, 1, 5, last, `TỔNG HỢP GIỜ LÀM THÊM NHÂN SỰ TRỰC ${holTitle(H)}`, { font: { b: true, sz: 14 }, h: 'center', v: 'center', wrap: true });
-  ws.merge(6, 1, 6, last, `Giới hạn: ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Chỉ tính nhân sự EPS; giờ trực lễ 12 giờ/ca (ca ngày 07h00–19h00, ca đêm 19h00–07h00); không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
+  ws.merge(6, 1, 6, last, `Giới hạn: ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Chỉ tính nhân sự EPS. Mỗi ca trực 12 giờ (ca ngày 07h00–19h00, ca đêm 19h00–07h00) tính ${fh(otHours(ctx.org).ca)} giờ làm thêm; ca đêm đầu tiên tính ${fh(otHours(ctx.org).first)} giờ. Không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
   const hs = { font: { b: true, sz: 12 }, border: 'thin', h: 'center', v: 'center', wrap: true };
-  ['STT', 'Họ và tên', 'Số hiệu', 'Chức danh', 'Đơn vị', 'Giờ trực lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(8, i + 1, t, hs)); ws.height(8, 34);
+  ['STT', 'Họ và tên', 'Số hiệu', 'Chức danh', 'Đơn vị', 'Giờ làm thêm dịp lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(8, i + 1, t, hs)); ws.height(8, 34);
   let r = 9, n = 0; const cs = { font: { sz: 12 }, border: 'thin', v: 'center', wrap: true }; const ns = { font: { sz: 12 }, border: 'thin', v: 'center', h: 'right' };
   PX.forEach(p => otRows(units[p.id], H, ctx).forEach(x => {
     n++; const warn = x.level === 'over' ? 'VƯỢT GIỚI HẠN' : x.level === 'missing' ? 'Thiếu số liệu' : '';
@@ -730,8 +734,8 @@ function buildPX(H, units, ctx, px) {
   // Sheet 3: giờ làm thêm
   { const last = 10; const ws = wb.sheet('Gio lam them', { cols: [6, 24, 28, 10, 11, 11, 11, 11, 11, 18], landscape: true }); const lim = ctx.org.limits || { month: 40, year: 300 };
     head(ws, last, `GIỜ LÀM THÊM CỦA NHÂN SỰ TRỰC LỄ – ${p.full}\nTRONG DỊP ${holTitle(H)}`);
-    ws.merge(5, 1, 5, last, `Giới hạn ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Giờ trực lễ 12 giờ/ca; không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
-    let r = 6; ['STT', 'Họ và tên', 'Chức danh', 'Giờ trực lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 34); r++;
+    ws.merge(5, 1, 5, last, `Giới hạn ${lim.month} giờ/tháng, ${lim.year} giờ/năm. Mỗi ca trực 12 giờ tính ${fh(otHours(ctx.org).ca)} giờ làm thêm; ca đêm đầu tiên tính ${fh(otHours(ctx.org).first)} giờ. Không tính Ca SCTX và người thuê ngoài.`, { font: { i: true, sz: 12 }, h: 'center' });
+    let r = 6; ['STT', 'Họ và tên', 'Chức danh', 'Giờ làm thêm dịp lễ', 'Lũy kế tháng', 'Lũy kế năm', 'Phát sinh khác', 'Tổng tháng', 'Tổng năm', 'Ghi chú'].forEach((t, i) => ws.set(r, i + 1, t, hs)); ws.height(r, 34); r++;
     otRows(u, H, ctx).forEach((x, i) => { const bad = x.level === 'over'; const ns = { font: { sz: 12, b: bad, color: bad ? 'C00000' : '000000' }, border: 'thin', v: 'center', h: 'right' };
       [i + 1, x.s.name, x.s.title, x.duty, x.m ?? '', x.y ?? '', x.x || 0, x.totM ?? '', x.totY ?? '', [bad ? 'Vượt giới hạn' : '', x.note].filter(Boolean).join('. ')].forEach((v, j) => ws.set(r, j + 1, v, j === 0 ? cc : j <= 2 || j === 9 ? cs : (j >= 7 && j <= 8 ? ns : Object.assign({}, cs, { h: 'right' })))); r++; });
     r++; sign(ws, r, last); ws.autoHeights(18, 16); }
@@ -769,7 +773,7 @@ function buildPRJ(ctx, pxFilter) {
   ws.autoHeights(18, 16); return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
 
 </script>
 <script>
@@ -1068,18 +1072,18 @@ function viewOt(px, u, h, ed) {
   const rows = otRows(u, h, ctx()); const lim = S.org.limits || { month: 40, year: 300 }; const dis = ed ? '' : 'disabled';
   const mon = h.days.length ? `tháng ${+h.days[0].date.slice(5, 7)}` : 'tháng';
   return `<section class="card stack"><h2>Giờ làm thêm của nhân sự trực lễ</h2>
-    <p class="hint">Nhập số giờ làm thêm <b>đã có đến trước dịp lễ</b> của từng người. Ứng dụng tự cộng giờ trực lễ (${(S.org.hours || {}).ca || 12} giờ/ca; cán bộ PX trực ca ngày ${(S.org.hours || {}).canboDay ?? 12} giờ). Danh sách gồm người trong lịch ca trực, cán bộ trực, tăng cường và huy động.</p>
+    <p class="hint">Nhập số giờ làm thêm <b>đã có đến trước dịp lễ</b> của từng người. Ứng dụng tự cộng giờ làm thêm dịp lễ: mỗi ca trực 12 giờ tính <b>${fh(otHours(S.org).ca)} giờ</b>; <b>ca đêm đầu tiên</b> (${h.days.length ? dm(h.days[0].date) : ''}) tính <b>${fh(otHours(S.org).first)} giờ</b>; cán bộ PX trực ca ngày ${fh(otHours(S.org).canbo)} giờ. Danh sách gồm người trong lịch ca trực, cán bộ trực, tăng cường và huy động.</p>
     ${(() => { const d0 = h.days.length ? h.days[0].date : ''; const [yy, mm] = d0 ? d0.split('-') : ['', '']; return d0 ? `<div class="notice stack" style="gap:4px">
       <span><b>Lũy kế tháng ${+mm}:</b> tổng giờ làm thêm từ ngày 01/${mm}/${yy} đến trước ngày trực lễ (${dm(d0)}). Dùng để so với giới hạn ${lim.month} giờ/tháng.</span>
       <span><b>Lũy kế năm:</b> tổng giờ làm thêm từ 01/01/${yy} đến trước ngày trực lễ, đã bao gồm cả tháng ${+mm}. Dùng để so với giới hạn ${lim.year} giờ/năm.</span>
       <span>Người chưa làm thêm thì ghi <b>0</b>, không để trống.</span></div>` : ''; })()}
-    ${rows.length ? `<div class="tbl scroll"><table class="list"><thead><tr><th>Họ và tên</th><th>Chức danh</th><th class="num">Giờ trực lễ</th><th class="num">Lũy kế ${mon}</th><th class="num">Lũy kế năm</th><th class="num">Phát sinh khác</th><th class="num">Tổng tháng</th><th class="num">Tổng năm</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead><tbody>
+    ${rows.length ? `<div class="tbl scroll"><table class="list"><thead><tr><th>Họ và tên</th><th>Chức danh</th><th class="num">Giờ làm thêm dịp lễ</th><th class="num">Lũy kế ${mon}</th><th class="num">Lũy kế năm</th><th class="num">Phát sinh khác</th><th class="num">Tổng tháng</th><th class="num">Tổng năm</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead><tbody>
     ${rows.map(r => `<tr class="${r.level === 'over' ? 'over' : r.level === 'near' ? 'near' : ''}"><td><b>${esc(r.s.name)}</b><br><span class="hint">${esc(r.sid)}</span></td><td>${esc(r.s.title)}</td>
-      <td class="num" title="${esc(r.items.join(', '))}">${r.duty}</td>
+      <td class="num" title="${esc(r.items.join(', '))}">${fh(r.duty)}</td>
       <td class="num"><input id="otm_${esc(r.sid)}" type="number" min="0" step="0.5" value="${r.m ?? ''}" data-ch="ot" data-f="m" data-px="${px}" data-sid="${esc(r.sid)}" ${dis}></td>
       <td class="num"><input id="oty_${esc(r.sid)}" type="number" min="0" step="0.5" value="${r.y ?? ''}" data-ch="ot" data-f="y" data-px="${px}" data-sid="${esc(r.sid)}" ${dis}></td>
       <td class="num"><input id="otx_${esc(r.sid)}" type="number" min="0" step="0.5" value="${r.x || ''}" data-ch="ot" data-f="x" data-px="${px}" data-sid="${esc(r.sid)}" ${dis}></td>
-      <td class="num"><b>${r.totM ?? '–'}</b></td><td class="num"><b>${r.totY ?? '–'}</b></td><td>${otBadge(r)}</td>
+      <td class="num"><b>${fh(r.totM)}</b></td><td class="num"><b>${fh(r.totY)}</b></td><td>${otBadge(r)}</td>
       <td><input id="otn_${esc(r.sid)}" type="text" value="${esc(r.note)}" data-ch="ot" data-f="note" data-px="${px}" data-sid="${esc(r.sid)}" ${dis} style="min-width:140px"></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="hint">Chưa có nhân sự EPS nào trong lịch trực.</p>'}</section>
 `;
@@ -1191,7 +1195,7 @@ function viewDash() {
     </tbody></table></div></section>
   <div class="cols">
   <section class="card stack"><div class="row between"><h2>Giờ làm thêm cao nhất</h2><span class="hint">Tổng năm so với ${lim.year} giờ</span></div>
-    ${top.length ? `<div class="otbars">${top.map(r => `<div class="otb"><span class="nm" title="${esc(r.s.name)}"><b>${esc(r.s.name)}</b> <small>${esc(r.p.short)}</small></span><span class="tr"><i class="${r.level}" style="width:${(r.totY / maxY * 100).toFixed(1)}%"></i><u style="left:${(lim.year / maxY * 100).toFixed(1)}%"></u></span><span class="num" style="text-align:right"><b>${r.totY}</b> giờ</span></div>`).join('')}</div>
+    ${top.length ? `<div class="otbars">${top.map(r => `<div class="otb"><span class="nm" title="${esc(r.s.name)}"><b>${esc(r.s.name)}</b> <small>${esc(r.p.short)}</small></span><span class="tr"><i class="${r.level}" style="width:${(r.totY / maxY * 100).toFixed(1)}%"></i><u style="left:${(lim.year / maxY * 100).toFixed(1)}%"></u></span><span class="num" style="text-align:right"><b>${fh(r.totY)}</b> giờ</span></div>`).join('')}</div>
     <div class="legend"><span style="--c:var(--accent)">Trong giới hạn</span><span style="--c:var(--warn)">Sát giới hạn</span><span style="--c:var(--danger)">Vượt giới hạn</span><span style="--c:var(--ink)">Vạch ${lim.year} giờ</span></div>` : '<p class="hint">Các phân xưởng chưa nhập giờ làm thêm.</p>'}</section>
   <section class="card stack"><h2>Theo phân xưởng</h2><div class="tbl"><table class="list"><thead><tr><th>Phân xưởng</th><th class="num">Người trực</th><th class="num">Vượt</th><th class="num">Sát</th><th class="num">Chưa nhập giờ</th></tr></thead><tbody>
     ${byPx.map(x => `<tr><td><b>${esc(x.p.short)}</b></td><td class="num">${x.n}</td><td class="num" style="color:${x.over ? 'var(--danger)' : 'inherit'}"><b>${x.over}</b></td><td class="num">${x.near}</td><td class="num">${x.miss}</td></tr>`).join('')}</tbody></table></div>
@@ -1341,8 +1345,8 @@ function viewOtAll() {
     <div class="row"><input id="qot" type="search" class="grow" placeholder="Tìm người" value="${esc(S.q.ot)}" data-in="qot">
       <select id="otpx" data-ch="otPx"><option value="">Tất cả phân xưởng</option>${PX.map(p => `<option value="${p.id}" ${S.otPx === p.id ? 'selected' : ''}>${esc(p.short)}</option>`).join('')}</select>
       <label class="hint row" style="gap:6px"><input id="otonly" type="checkbox" ${S.otOnly ? 'checked' : ''} data-ch="otOnly"> Chỉ người vượt / sát giới hạn</label></div>
-    <div class="tbl scroll"><table class="list"><thead><tr><th>Họ và tên</th><th>Đơn vị</th><th class="num">Giờ trực lễ</th><th class="num">Lũy kế tháng</th><th class="num">Lũy kế năm</th><th class="num">Phát sinh</th><th class="num">Tổng tháng</th><th class="num">Tổng năm</th><th>Trạng thái</th></tr></thead><tbody>
-    ${rows.map(r => `<tr class="${r.level === 'over' ? 'over' : r.level === 'near' ? 'near' : ''}"><td><b>${esc(r.s.name)}</b><br><span class="hint">${esc(r.s.title)}</span></td><td>${esc(r.p.short)}</td><td class="num">${r.duty}</td><td class="num">${r.m ?? '–'}</td><td class="num">${r.y ?? '–'}</td><td class="num">${r.x || 0}</td><td class="num"><b>${r.totM ?? '–'}</b></td><td class="num"><b>${r.totY ?? '–'}</b></td><td>${otBadge(r)}</td></tr>`).join('') || '<tr><td colspan="9" class="hint">Không có ai.</td></tr>'}
+    <div class="tbl scroll"><table class="list"><thead><tr><th>Họ và tên</th><th>Đơn vị</th><th class="num">Giờ làm thêm dịp lễ</th><th class="num">Lũy kế tháng</th><th class="num">Lũy kế năm</th><th class="num">Phát sinh</th><th class="num">Tổng tháng</th><th class="num">Tổng năm</th><th>Trạng thái</th></tr></thead><tbody>
+    ${rows.map(r => `<tr class="${r.level === 'over' ? 'over' : r.level === 'near' ? 'near' : ''}"><td><b>${esc(r.s.name)}</b><br><span class="hint">${esc(r.s.title)}</span></td><td>${esc(r.p.short)}</td><td class="num">${fh(r.duty)}</td><td class="num">${fh(r.m)}</td><td class="num">${fh(r.y)}</td><td class="num">${fh(r.x || 0)}</td><td class="num"><b>${fh(r.totM)}</b></td><td class="num"><b>${fh(r.totY)}</b></td><td>${otBadge(r)}</td></tr>`).join('') || '<tr><td colspan="9" class="hint">Không có ai.</td></tr>'}
     </tbody></table></div></section>`;
 }
 
@@ -1364,9 +1368,10 @@ function viewDocs() {
   <section class="card stack"><h2>Quy tắc tính giờ làm thêm</h2><div class="row">
     <label class="field"><span>Giới hạn giờ/tháng</span><input id="lm" type="number" value="${lim.month ?? 40}" data-ch="org" data-f="limits.month" style="width:110px"></label>
     <label class="field"><span>Giới hạn giờ/năm</span><input id="ly" type="number" value="${lim.year ?? 300}" data-ch="org" data-f="limits.year" style="width:110px"></label>
-    <label class="field"><span>Giờ mỗi ca trực</span><input id="hc" type="number" value="${hr.ca ?? 12}" data-ch="org" data-f="hours.ca" style="width:110px"></label>
-    <label class="field"><span>Cán bộ PX trực ca ngày</span><input id="hcd" type="number" value="${hr.canboDay ?? 12}" data-ch="org" data-f="hours.canboDay" style="width:110px"></label>
-    <label class="field"><span>Trực điện thoại đêm</span><input id="hpn" type="number" value="${hr.phoneNight ?? 0}" data-ch="org" data-f="hours.phoneNight" style="width:110px"></label></div>
+    <label class="field"><span>Giờ làm thêm mỗi ca 12 giờ</span><input id="hc" type="number" step="0.5" value="${otHours(o).ca}" data-ch="org" data-f="hours.otCa" style="width:110px"></label>
+    <label class="field"><span>Ca đêm đầu tiên</span><input id="hfn" type="number" step="0.5" value="${otHours(o).first}" data-ch="org" data-f="hours.otFirst" style="width:110px"></label>
+    <label class="field"><span>Cán bộ PX trực ca ngày</span><input id="hcd" type="number" step="0.5" value="${otHours(o).canbo}" data-ch="org" data-f="hours.otCanbo" style="width:110px"></label>
+    <label class="field"><span>Trực điện thoại đêm</span><input id="hpn" type="number" step="0.5" value="${hr.phoneNight ?? 0}" data-f="hours.phoneNight" style="width:110px"></label></div>
     <p class="hint">Mặc định 40 giờ/tháng (Điều 107 Bộ luật Lao động 2019) và 300 giờ/năm (ngành sản xuất, cung cấp điện được làm tối đa 300 giờ/năm theo Nghị định 145/2020/NĐ-CP). Ca SCTX và thuê ngoài không tính.</p></section>`;
 }
 
@@ -1441,7 +1446,7 @@ function renderOverlay() {
     <input id="qcand" type="search" placeholder="Tìm tên, số hiệu${S.candAll ? '' : ' trong ' + esc(PXI[px].short)}" value="${esc(S.q.cand)}" data-in="qcand">
     <label class="hint row" style="gap:6px"><input id="candall" type="checkbox" ${S.candAll ? 'checked' : ''} data-ch="candAll"> Tìm cả nhân sự đơn vị khác (điều động hỗ trợ)</label>
     <div class="body">${pool.map(s => { const w = used.get(s.id); const d = duty.get(s.id);
-      return `<button class="cand" data-act="pick" data-sid="${esc(s.id)}"><span class="grow"><b>${esc(s.name)}</b><small>${esc(s.title)}${s.dept !== PXI[px].dept ? ' · ' + esc(s.dept) : ''}${c.phones[s.id] ? ' · ' + esc(c.phones[s.id]) : ''}</small>${w && kind === 'roster' ? `<span class="w">Đã trực ${esc(w.join(', '))} ngày này</span>` : ''}${prjOn(c, s.id, date).map(pj => `<span class="w">Đang ở công trình ${esc(pj.type)}: ${esc(pj.name)}</span>`).join('')}</span><span class="k">${d ? d.h + ' giờ' : '0 giờ'}<br>dịp này</span></button>`; }).join('') || '<p class="hint">Không tìm thấy.</p>'}</div>`}
+      return `<button class="cand" data-act="pick" data-sid="${esc(s.id)}"><span class="grow"><b>${esc(s.name)}</b><small>${esc(s.title)}${s.dept !== PXI[px].dept ? ' · ' + esc(s.dept) : ''}${c.phones[s.id] ? ' · ' + esc(c.phones[s.id]) : ''}</small>${w && kind === 'roster' ? `<span class="w">Đã trực ${esc(w.join(', '))} ngày này</span>` : ''}${prjOn(c, s.id, date).map(pj => `<span class="w">Đang ở công trình ${esc(pj.type)}: ${esc(pj.name)}</span>`).join('')}</span><span class="k">${d ? fh(d.h) + ' giờ' : '0 giờ'}<br>làm thêm</span></button>`; }).join('') || '<p class="hint">Không tìm thấy.</p>'}</div>`}
   </aside>`;
 }
 function outPicker(px, list, q) {
