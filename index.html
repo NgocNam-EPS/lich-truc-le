@@ -424,6 +424,8 @@ function otRows(u, H, ctx) {
 }
 
 /* ===== Kiểm tra đủ dữ liệu trước khi gửi duyệt ===== */
+/* Vị trí trực không bắt buộc: để trống vẫn gửi duyệt được (NMNĐ Phú Mỹ 2.2) */
+const optGroup = g => /Phú Mỹ 2\.2/.test(g || '');
 function checkUnit(u, H, ctx) {
   const err = [], warn = []; const p = PXI[u.px];
   H.days.forEach(day => {
@@ -431,7 +433,7 @@ function checkUnit(u, H, ctx) {
     caList(day).forEach(c => u.groups.forEach((g, gi) => {
       const k = rkey(day.date, c, gi); const list = (u.roster[k] || []).filter(e => e.k !== 'os');
       const where = `${caName(c)} ${dmy(day.date)}${g ? ' ' + g : ''}`;
-      if (!list.length && !u.follow[k]) err.push(`Chưa có người trực ${where}`);
+      if (!list.length && !u.follow[k] && !optGroup(g)) err.push(`Chưa có người trực ${where}`);
       if (list.length && !list.some(e => e.nt)) warn.push(`Chưa chọn nhóm trưởng (NT) ${where}`);
       list.forEach(e => { if (e.sid) { perCa[e.sid] = perCa[e.sid] || new Set(); perCa[e.sid].add(c); } });
     }));
@@ -786,7 +788,7 @@ function buildPRJ(ctx, pxFilter) {
   ws.autoHeights(18, 16); return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
 
 </script>
 <script>
@@ -1027,7 +1029,7 @@ function viewRoster(px, u, h, ed) {
       html += `<div class="ca"><h4>${caLabel(c)} <small>${caTime(c)} · ${n} người</small></h4>`;
       u.groups.forEach((g, gi) => {
         const k = rkey(day.date, c, gi); const list = u.roster[k] || []; const path = pathOf('roster', px, k);
-        html += `<div class="grp">${g || u.groups.length > 1 ? `<span class="lbl">${esc(g || 'Vị trí ' + (gi + 1))}</span>` : ''}
+        html += `<div class="grp">${g || u.groups.length > 1 ? `<span class="lbl">${esc(g || 'Vị trí ' + (gi + 1))}${optGroup(g) ? ' <span class="hint" style="font-weight:400">(không bắt buộc)</span>' : ''}</span>` : ''}
           ${list.map((e, i) => chip(e, path, ed, i)).join('')}
           ${ed ? `<div class="row" style="gap:6px"><button class="add grow" data-act="addOpen" data-path="${esc(path)}">+ Nhân sự EPS</button><button class="add grow" data-act="addOpen" data-kind="out" data-path="${esc(path)}">+ Người thuê ngoài</button></div>` : ''}
           ${!list.filter(e => e.k !== 'os').length ? `<label class="hint row" style="gap:6px"><input type="checkbox" id="fl_${esc(k)}" ${u.follow[k] ? 'checked' : ''} data-ch="follow" data-px="${px}" data-k="${esc(k)}" ${ed ? '' : 'disabled'}> Không bố trí, theo lịch trực tăng cường</label>` : ''}</div>`;

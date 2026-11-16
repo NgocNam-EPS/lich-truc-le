@@ -121,6 +121,8 @@ function otRows(u, H, ctx) {
 }
 
 /* ===== Kiểm tra đủ dữ liệu trước khi gửi duyệt ===== */
+/* Vị trí trực không bắt buộc: để trống vẫn gửi duyệt được (NMNĐ Phú Mỹ 2.2) */
+const optGroup = g => /Phú Mỹ 2\.2/.test(g || '');
 function checkUnit(u, H, ctx) {
   const err = [], warn = []; const p = PXI[u.px];
   H.days.forEach(day => {
@@ -128,7 +130,7 @@ function checkUnit(u, H, ctx) {
     caList(day).forEach(c => u.groups.forEach((g, gi) => {
       const k = rkey(day.date, c, gi); const list = (u.roster[k] || []).filter(e => e.k !== 'os');
       const where = `${caName(c)} ${dmy(day.date)}${g ? ' ' + g : ''}`;
-      if (!list.length && !u.follow[k]) err.push(`Chưa có người trực ${where}`);
+      if (!list.length && !u.follow[k] && !optGroup(g)) err.push(`Chưa có người trực ${where}`);
       if (list.length && !list.some(e => e.nt)) warn.push(`Chưa chọn nhóm trưởng (NT) ${where}`);
       list.forEach(e => { if (e.sid) { perCa[e.sid] = perCa[e.sid] || new Set(); perCa[e.sid].add(c); } });
     }));
@@ -483,4 +485,4 @@ function buildPRJ(ctx, pxFilter) {
   ws.autoHeights(18, 16); return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };

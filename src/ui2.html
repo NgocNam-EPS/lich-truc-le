@@ -422,7 +422,7 @@ function viewRoster(px, u, h, ed) {
       html += `<div class="ca"><h4>${caLabel(c)} <small>${caTime(c)} · ${n} người</small></h4>`;
       u.groups.forEach((g, gi) => {
         const k = rkey(day.date, c, gi); const list = u.roster[k] || []; const path = pathOf('roster', px, k);
-        html += `<div class="grp">${g || u.groups.length > 1 ? `<span class="lbl">${esc(g || 'Vị trí ' + (gi + 1))}</span>` : ''}
+        html += `<div class="grp">${g || u.groups.length > 1 ? `<span class="lbl">${esc(g || 'Vị trí ' + (gi + 1))}${optGroup(g) ? ' <span class="hint" style="font-weight:400">(không bắt buộc)</span>' : ''}</span>` : ''}
           ${list.map((e, i) => chip(e, path, ed, i)).join('')}
           ${ed ? `<div class="row" style="gap:6px"><button class="add grow" data-act="addOpen" data-path="${esc(path)}">+ Nhân sự EPS</button><button class="add grow" data-act="addOpen" data-kind="out" data-path="${esc(path)}">+ Người thuê ngoài</button></div>` : ''}
           ${!list.filter(e => e.k !== 'os').length ? `<label class="hint row" style="gap:6px"><input type="checkbox" id="fl_${esc(k)}" ${u.follow[k] ? 'checked' : ''} data-ch="follow" data-px="${px}" data-k="${esc(k)}" ${ed ? '' : 'disabled'}> Không bố trí, theo lịch trực tăng cường</label>` : ''}</div>`;
