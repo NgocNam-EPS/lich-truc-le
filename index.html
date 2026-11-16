@@ -1253,8 +1253,47 @@ function viewProjects(px) {
         <label class="field"><span>Kết thúc</span><input id="pe_${esc(p.id)}" type="date" value="${esc(p.to || '')}" data-ch="prjF" data-f="to" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label></div>
       <label class="field"><span>Ghi chú</span><input id="pg_${esc(p.id)}" type="text" value="${esc(p.note || '')}" data-ch="prjF" data-f="note" data-px="${px}" data-id="${esc(p.id)}" ${dis} placeholder="vd: số quyết định, phạm vi công việc"></label>
       <div class="cas">${ms.map(m => memberChip(px, p, m, m._i, ed)).join('') || '<p class="hint">Chưa có nhân sự.</p>'}</div>
-      ${ed ? `<div class="row" style="gap:6px"><button class="add grow" data-act="prjOpen" data-px="${px}" data-id="${esc(p.id)}">+ Nhân sự EPS</button><button class="add grow" data-act="prjOpen" data-kind="out" data-px="${px}" data-id="${esc(p.id)}">+ Người thuê ngoài</button></div>` : ''}
+      ${ed ? `<div class="row" style="gap:6px"><button class="add grow" data-act="prjOpen" data-px="${px}" data-id="${esc(p.id)}">+ Nhân sự EPS</button><button class="add grow" data-act="prjOpen" data-kind="out" data-px="${px}" data-id="${esc(p.id)}">+ Người thuê ngoài</button><label class="add grow" style="text-align:center;cursor:pointer" title="Chọn tệp Excel có danh sách họ tên, ứng dụng tự dò trong danh sách nhân sự EPS">⇪ Nhập danh sách từ Excel<input type="file" accept=".xlsx,.xls,.csv" hidden data-ch="prjXl" data-px="${px}" data-id="${esc(p.id)}"></label></div>` : ''}
     </section>`; }).join('') || `<section class="card"><p class="hint">${all.length ? 'Không có công trình đang hoặc sắp thực hiện.' : 'Chưa có công trình nào.'}</p></section>`}`;
+}
+/* Nhập danh sách nhân sự công trình từ Excel: dò họ tên (hoặc số hiệu EPS-xxxx) trong danh sách nhân sự EPS */
+const foldName = s => normName(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
+const looksName = s => { const t = String(s || '').replace(/\s+/g, ' ').trim(); const w = t.split(' '); return w.length >= 2 && w.length <= 6 && t.length <= 40 && /^[\p{L} .'-]+$/u.test(t) && w.every(x => /^\p{Lu}/u.test(x)) && !/^(họ|ho|stt|chức|danh|tổ|phân|phòng|công|đơn|ghi|ngày|nhóm|tên)\b/i.test(t); };
+function matchImport(rows, px) {
+  const byId = new Map(STAFF.map(s => [s.id.toUpperCase(), s])), exact = new Map(), fold = new Map(); const dept = PXI[px].dept;
+  STAFF.forEach(s => { [[exact, normName(s.name)], [fold, foldName(s.name)]].forEach(([m, k]) => { if (!m.has(k)) m.set(k, []); m.get(k).push(s); }); });
+  const pick = l => { if (!l || !l.length) return null; const own = l.filter(s => s.dept === dept); return own.length === 1 ? [own[0]] : own.length > 1 ? own : l; };
+  const found = [], seen = new Set(), unknown = [], nameCols = new Set(); const raw = [];
+  rows.forEach((r, ri) => (r || []).forEach((v, ci) => { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); if (!t) return;
+    const idm = t.toUpperCase().match(/\bEPS-?\s?(\d{3,5})\b/); let hit = null, how = '';
+    if (idm) { const s = byId.get('EPS-' + idm[1]); if (s) { hit = [s]; how = 'id'; } }
+    if (!hit) { const e = pick(exact.get(normName(t))); if (e) { hit = e; how = 'ten'; } else { const f = pick(fold.get(foldName(t))); if (f) { hit = f; how = 'khongdau'; } } }
+    if (hit) { if (how !== 'id') nameCols.add(ci); const rowIds = new Set((r || []).map(x => { const m = String(x || '').toUpperCase().match(/\bEPS-?\s?(\d{3,5})\b/); return m ? 'EPS-' + m[1] : ''; }).filter(Boolean));
+      if (hit.length > 1) { const byRow = hit.filter(s => rowIds.has(s.id)); if (byRow.length === 1) hit = byRow; }
+      const key = hit.length === 1 ? hit[0].id : 'amb:' + normName(t) + ':' + ri; if (hit.length === 1 && seen.has(key)) return; seen.add(key);
+      // một dòng có cả số hiệu và họ tên: chỉ lấy một lần
+      if (hit.length === 1 && raw.some(x => x.ri === ri && x.opts.length === 1 && x.opts[0].id === hit[0].id)) return;
+      raw.push({ ri, text: t, how, opts: hit, sel: hit.length === 1 ? hit[0].id : '', on: true });
+    } else if (looksName(t)) unknown.push({ ri, ci, text: t });
+  }));
+  // bỏ trùng giữa "dò theo số hiệu" và "dò theo tên" trên cùng dòng
+  const out = raw.filter((x, i) => !(x.how === 'id' && raw.some((y, j) => j !== i && y.ri === x.ri && y.opts.length === 1 && y.opts[0].id === x.opts[0].id && y.how !== 'id')));
+  const nf = []; const nfSeen = new Set(); unknown.filter(u => !nameCols.size || nameCols.has(u.ci)).forEach(u => { const k = normName(u.text); if (!nfSeen.has(k)) { nfSeen.add(k); nf.push({ text: u.text, on: false }); } });
+  return { found: out, notFound: nf };
+}
+function prjImpDrawer(P) {
+  const p = prjList(P.px).find(x => x.id === P.id); if (!p) return ''; const c = ctx(); const have = new Set((p.members || []).map(m => m.sid).filter(Boolean)); const R = P.res;
+  const dept = PXI[P.px].dept; const ok = R.found.filter(x => x.sel && !have.has(x.sel)); const n = ok.filter(x => x.on).length + R.notFound.filter(x => x.on).length;
+  const rowF = (x, i) => { const s = x.sel && IDX.get(x.sel); const dup = x.sel && have.has(x.sel);
+    return `<div class="cand" style="cursor:default;${dup ? 'opacity:.55' : ''}"><input type="checkbox" ${x.on && !dup && x.sel ? 'checked' : ''} ${dup || !x.sel ? 'disabled' : ''} data-ch="impOn" data-i="${i}" aria-label="Chọn ${esc(x.text)}" style="width:18px;height:18px;flex:none">
+      <span class="grow"><b>${esc(s ? s.name : x.text)}</b>${x.how === 'khongdau' ? ' <span class="badge k" title="Tên trong tệp viết khác dấu">≈ ' + esc(x.text) + '</span>' : ''}
+      ${x.opts.length > 1 ? `<select data-ch="impSel" data-i="${i}" style="display:block;margin-top:4px;max-width:100%"><option value="">— ${x.opts.length} người trùng tên, chọn đúng người —</option>${x.opts.map(o => `<option value="${esc(o.id)}" ${o.id === x.sel ? 'selected' : ''}>${esc(o.id)} · ${esc(o.title)} · ${esc(o.dept)}</option>`).join('')}</select>` : ''}
+      <small>${s ? esc([s.id, s.title, s.dept !== dept ? s.dept : '', c.phones[s.id]].filter(Boolean).join(' · ')) : ''}${dup ? ' · đã có trong công trình' : ''}</small></span></div>`; };
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Nhập nhân sự từ Excel"><div class="row between"><div><h2>Nhập từ Excel</h2><p class="hint">${esc(P.file)} → ${esc(p.name || 'công trình')}</p></div><button class="btn sm" data-act="close">Đóng</button></div>
+    <p class="hint">Tìm thấy <b style="color:var(--ink)">${R.found.length}</b> người trong danh sách EPS${R.found.some(x => x.opts.length > 1) ? `, trong đó <b style="color:var(--holiday)">${R.found.filter(x => x.opts.length > 1).length}</b> trường hợp trùng tên cần chọn` : ''}; <b style="color:var(--ink)">${R.notFound.length}</b> tên không có trong danh sách EPS.</p>
+    <div class="body">${R.found.map(rowF).join('') || '<p class="hint">Không dò được tên nào. Tệp cần có cột Họ và tên (hoặc Số hiệu EPS-xxxx).</p>'}
+      ${R.notFound.length ? `<h3 style="margin:10px 0 2px">Không có trong danh sách EPS</h3><p class="hint">Tích để thêm làm người thuê ngoài; bỏ qua nếu là tên viết sai.</p>${R.notFound.map((x, i) => `<label class="cand" style="cursor:pointer"><input type="checkbox" ${x.on ? 'checked' : ''} data-ch="impNf" data-i="${i}" style="width:18px;height:18px;flex:none"><span class="grow"><b>${esc(x.text)}</b><small>Thêm làm người thuê ngoài</small></span></label>`).join('')}` : ''}</div>
+    <div class="row"><button class="btn primary" data-act="impDo" ${n ? '' : 'disabled'}>Thêm ${n} người vào công trình</button><button class="btn" data-act="close">Hủy</button></div></aside>`;
 }
 function prjDrawer(P) {
   const p = prjList(P.px).find(x => x.id === P.id); if (!p) return ''; const c = ctx(); const q = S.q.cand.trim().toLowerCase();
@@ -1421,6 +1460,7 @@ function renderOverlay() {
   const o = E('overlay'); const P = S.panel; if (!P || !S.me) { o.innerHTML = ''; return; }
   if (P.type === 'cell') { o.innerHTML = cellDrawer(P); return; }
   if (P.type === 'prj') { o.innerHTML = prjDrawer(P); return; }
+  if (P.type === 'prjImp') { o.innerHTML = prjImpDrawer(P); return; }
   if (P.type === 'file') { const f = S.files[P.id] || {}; const isPdf = /pdf/.test(f.type || '');
     o.innerHTML = `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Xem văn bản" style="width:min(900px,100vw)"><div class="row between"><div class="grow"><h2>${esc(f.title || f.name || '')}</h2><p class="hint">${esc(f.name || '')}</p></div><button class="btn sm" data-act="dlFile" data-id="${esc(P.id)}">Tải về</button><button class="btn sm" data-act="close">Đóng</button></div>
       <div class="preview">${P.err ? `<p class="hint">${esc(P.err)}</p>` : !P.url ? '<p class="hint">Đang mở văn bản…</p>' : isPdf ? `<iframe src="${P.url}" title="${esc(f.name)}"></iframe>` : `<img src="${P.url}" alt="${esc(f.title || f.name)}">`}</div>
@@ -1475,6 +1515,11 @@ function outForm(e, gc, u) {
 function mutUnit(px, fn) { const u = px === 'lead' ? LU() : clone(U(px)); fn(u); saveUnit(px, u); }
 function mutHol(fn) { const h = clone(H()); fn(h); saveHoliday(h); }
 const ACT = {
+  impDo: () => { const P = S.panel; const R = P.res; let n = 0;
+    mutPrj(P.px, P.id, p => { p.members = p.members || []; const have = new Set(p.members.map(m => m.sid).filter(Boolean)); const haveN = new Set(p.members.filter(m => !m.sid).map(m => normName(m.name)));
+      R.found.forEach(x => { if (x.on && x.sel && !have.has(x.sel)) { p.members.push({ sid: x.sel, k: 'eps' }); have.add(x.sel); n++; } });
+      R.notFound.forEach(x => { if (x.on && !haveN.has(normName(x.text))) { p.members.push({ name: x.text, k: 'thue' }); haveN.add(normName(x.text)); n++; } }); });
+    S.panel = null; render(); toast(`Đã thêm ${n} người vào công trình.`); },
   tab: el => { S.tab = el.dataset.v; S.panel = null; render(); },
   pxTab: el => { S.pxTab = el.dataset.v; render(); },
   openPx: el => { S.pxSel = el.dataset.px; S.pxTab = 'roster'; S.tab = 'px'; render(); },
@@ -1568,6 +1613,14 @@ const ACT = {
 };
 const setPath = (o, path, v) => { const ks = path.split('.'); let x = o; ks.slice(0, -1).forEach(k => { x[k] = x[k] ?? (isNaN(+k) ? {} : []); x = x[k]; }); x[ks[ks.length - 1]] = v; };
 const CH = {
+  prjXl: async el => { const f = el.files && el.files[0]; const px = el.dataset.px, id = el.dataset.id; el.value = ''; if (!f) return;
+    if (typeof XLSX === 'undefined') { toast('Chức năng này chỉ có trên bản web.'); return; }
+    try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); let rows = []; wb.SheetNames.forEach(n => { rows = rows.concat(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '' })); });
+      S.panel = { type: 'prjImp', px, id, file: f.name, res: matchImport(rows, px) }; render(); }
+    catch (e) { toast('Không đọc được tệp: ' + (e.message || e)); } },
+  impOn: el => { const x = S.panel.res.found[+el.dataset.i]; x.on = el.checked; render(); },
+  impSel: el => { const x = S.panel.res.found[+el.dataset.i]; x.sel = el.value; x.on = !!el.value; render(); },
+  impNf: el => { S.panel.res.notFound[+el.dataset.i].on = el.checked; render(); },
   pickHol: el => { S.cur = el.value; S.panel = null; subUnits(); render(); },
   pxSel: el => { S.pxSel = el.value; render(); },
   prjHide: el => { S.prjHideDone = el.checked; render(); },
