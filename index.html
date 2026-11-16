@@ -303,8 +303,8 @@ if (typeof module !== 'undefined') module.exports = { XW };
 
 /* ===== Lõi dữ liệu: đơn vị, ngày giờ, giờ làm thêm, kiểm tra, xuất mẫu ===== */
 const PX = [
-  { id: 'cc-pm', dept: 'PXSCC-PM', short: 'PXSCC PM', name: 'PXSC Cơ - Nhiệt Phú Mỹ', full: 'PHÂN XƯỞNG SỬA CHỮA CƠ - NHIỆT PHÚ MỸ', area: 'PM', kind: 'CC', groups: [''] },
-  { id: 'cd-pm', dept: 'PXSCĐ-PM', short: 'PXSCĐ PM', name: 'PXSC Điện - Tự động Phú Mỹ', full: 'PHÂN XƯỞNG SỬA CHỮA ĐIỆN - TỰ ĐỘNG PHÚ MỸ', area: 'PM', kind: 'CĐ', groups: [''] },
+  { id: 'cc-pm', dept: 'PXSCC-PM', short: 'PXSCC PM', name: 'PXSC Cơ - Nhiệt Phú Mỹ', full: 'PHÂN XƯỞNG SỬA CHỮA CƠ - NHIỆT PHÚ MỸ', area: 'PM', kind: 'CC', groups: ['tại NMNĐ Phú Mỹ 3', 'tại NMNĐ Phú Mỹ 2.2'] },
+  { id: 'cd-pm', dept: 'PXSCĐ-PM', short: 'PXSCĐ PM', name: 'PXSC Điện - Tự động Phú Mỹ', full: 'PHÂN XƯỞNG SỬA CHỮA ĐIỆN - TỰ ĐỘNG PHÚ MỸ', area: 'PM', kind: 'CĐ', groups: ['tại NMNĐ Phú Mỹ 3', 'tại NMNĐ Phú Mỹ 2.2'] },
   { id: 'cc-vt', dept: 'PXSCC-VT', short: 'PXSCC VT', name: 'PXSC Cơ - Nhiệt Vĩnh Tân', full: 'PHÂN XƯỞNG SỬA CHỮA CƠ - NHIỆT VĨNH TÂN', area: 'VT', kind: 'CC', groups: ['tại NMNĐ VT2', 'tại NMNĐ VT4'] },
   { id: 'cd-vt', dept: 'PXSCĐ-VT', short: 'PXSCĐ VT', name: 'PXSC Điện - Tự động Vĩnh Tân', full: 'PHÂN XƯỞNG SỬA CHỮA ĐIỆN - TỰ ĐỘNG VĨNH TÂN', area: 'VT', kind: 'CĐ', groups: ['tại Vĩnh Tân 2', 'tại Vĩnh Tân 4'] },
   { id: 'cc-md', dept: 'PXSCC-MD', short: 'PXSCC MD', name: 'PXSC Cơ - Nhiệt Mông Dương', full: 'PHÂN XƯỞNG SỬA CHỮA CƠ - NHIỆT MÔNG DƯƠNG', area: 'MD', kind: 'CC', groups: [''] },
@@ -349,7 +349,7 @@ function defaultCongXa() {
     { id: 's6', title: 'Trực phục vụ công tác PCCC tại NMĐ PM3 và trực phục vụ công tác xe chuyên dùng', type: 'shift', rows: [{ ca: 'Ca1', cells: {} }, { ca: 'Ca2', cells: {} }] }
   ] };
 }
-function normUnit(u, pxid) { const d = defaultUnit(pxid); const x = Object.assign(d, u || {}); ['canbo', 'roster', 'follow', 'tc', 'hd', 'ot'].forEach(k => x[k] = x[k] || {}); if (!x.groups || !x.groups.length) x.groups = PXI[pxid].groups.slice(); if (pxid === 'gc-ph' && !x.congxa) x.congxa = defaultCongXa(); if (!x.signer) x.signer = { title: 'QUẢN ĐỐC', name: '' }; return x; }
+function normUnit(u, pxid) { const d = defaultUnit(pxid); const x = Object.assign(d, u || {}); ['canbo', 'roster', 'follow', 'tc', 'hd', 'ot'].forEach(k => x[k] = x[k] || {}); if (!x.groups || !x.groups.length) x.groups = PXI[pxid].groups.slice(); if ((pxid === 'cc-pm' || pxid === 'cd-pm') && x.groups.length === 1 && !x.groups[0]) x.groups = PXI[pxid].groups.slice(); /* 11/2026: bổ sung 2 vị trí trực Phú Mỹ */ if (pxid === 'gc-ph' && !x.congxa) x.congxa = defaultCongXa(); if (!x.signer) x.signer = { title: 'QUẢN ĐỐC', name: '' }; return x; }
 
 /* ===== Hiển thị một người ===== */
 function personName(e, ctx) { if (e.sid && ctx.idx.get(e.sid)) return ctx.idx.get(e.sid).name; return e.name || ''; }
@@ -1281,6 +1281,8 @@ function matchImport(rows, px) {
   const nf = []; const nfSeen = new Set(); unknown.filter(u => !nameCols.size || nameCols.has(u.ci)).forEach(u => { const k = normName(u.text); if (!nfSeen.has(k)) { nfSeen.add(k); nf.push({ text: u.text, on: false }); } });
   return { found: out, notFound: nf };
 }
+function impCount() { const P = S.panel; const p = prjList(P.px).find(x => x.id === P.id) || {}; const have = new Set((p.members || []).map(m => m.sid).filter(Boolean));
+  const n = P.res.found.filter(x => x.on && x.sel && !have.has(x.sel)).length + P.res.notFound.filter(x => x.on).length; const b = document.querySelector('[data-act=impDo]'); if (b) { b.textContent = `Thêm ${n} người vào công trình`; b.disabled = !n; } }
 function prjImpDrawer(P) {
   const p = prjList(P.px).find(x => x.id === P.id); if (!p) return ''; const c = ctx(); const have = new Set((p.members || []).map(m => m.sid).filter(Boolean)); const R = P.res;
   const dept = PXI[P.px].dept; const ok = R.found.filter(x => x.sel && !have.has(x.sel)); const n = ok.filter(x => x.on).length + R.notFound.filter(x => x.on).length;
@@ -1618,9 +1620,9 @@ const CH = {
     try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); let rows = []; wb.SheetNames.forEach(n => { rows = rows.concat(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '' })); });
       S.panel = { type: 'prjImp', px, id, file: f.name, res: matchImport(rows, px) }; render(); }
     catch (e) { toast('Không đọc được tệp: ' + (e.message || e)); } },
-  impOn: el => { const x = S.panel.res.found[+el.dataset.i]; x.on = el.checked; render(); },
+  impOn: el => { const x = S.panel.res.found[+el.dataset.i]; x.on = el.checked; impCount(); },
   impSel: el => { const x = S.panel.res.found[+el.dataset.i]; x.sel = el.value; x.on = !!el.value; render(); },
-  impNf: el => { S.panel.res.notFound[+el.dataset.i].on = el.checked; render(); },
+  impNf: el => { S.panel.res.notFound[+el.dataset.i].on = el.checked; impCount(); },
   pickHol: el => { S.cur = el.value; S.panel = null; subUnits(); render(); },
   pxSel: el => { S.pxSel = el.value; render(); },
   prjHide: el => { S.prjHideDone = el.checked; render(); },
