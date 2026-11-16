@@ -818,7 +818,10 @@ function canDelFile(f) { return S.me && (isAdmin() || (f.by && f.by === S.me.u))
 function unitName(px) { return px === 'lead' ? LEAD_NAME : PXI[px].short; }
 function isAdmin() { return S.me && (S.me.role === 'owner' || S.me.role === 'admin'); }
 function myPx() { return S.me && S.me.role === 'px' ? S.me.px : null; }
-function sortedHolidays() { return Object.values(S.holidays).sort((a, b) => ((b.days[0] || {}).date || '').localeCompare((a.days[0] || {}).date || '')); }
+/* Dịp lễ sắp tới hoặc đang diễn ra xếp trước (gần nhất lên đầu), sau đó là các dịp đã qua (mới nhất lên đầu) */
+function sortedHolidays() { const t = todayIso(); const first = h => (h.days[0] || {}).date || ''; const last = h => (h.days[h.days.length - 1] || {}).date || first(h);
+  const up = [], past = []; Object.values(S.holidays).forEach(h => (last(h) >= t || !first(h) ? up : past).push(h));
+  return up.sort((a, b) => first(a).localeCompare(first(b))).concat(past.sort((a, b) => first(b).localeCompare(first(a)))); }
 function ensureCur() { if (!S.holidays[S.cur]) { const l = sortedHolidays(); const old = S.cur; S.cur = l.length ? l[0].id : null; if (old !== S.cur) subUnits(); } }
 function staffOf(px) { const d = PXI[px].dept; return STAFF.filter(s => s.dept === d); }
 function pkeyOf(sid) { const s = IDX.get(sid); return (s && DEPT2PX[s.dept]) || 'other'; }
