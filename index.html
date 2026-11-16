@@ -424,8 +424,8 @@ function otRows(u, H, ctx) {
 }
 
 /* ===== Kiểm tra đủ dữ liệu trước khi gửi duyệt ===== */
-/* Vị trí trực không bắt buộc: để trống vẫn gửi duyệt được (NMNĐ Phú Mỹ 2.2) */
-const optGroup = g => /Phú Mỹ 2\.2/.test(g || '');
+/* Vị trí trực không bắt buộc: để trống vẫn gửi duyệt được (NMNĐ Phú Mỹ 3, NMNĐ Phú Mỹ 2.2) */
+const optGroup = g => /Phú Mỹ (3|2\.2)\b/.test(g || '');
 function checkUnit(u, H, ctx) {
   const err = [], warn = []; const p = PXI[u.px];
   H.days.forEach(day => {
