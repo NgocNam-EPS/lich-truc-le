@@ -561,7 +561,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
     const det = P('2. Chi tiết bất thường, sự cố: (chỉ nêu khi có bất thường, sự cố thiết bị, mất an ninh hay xảy ra vi phạm AT-VSLĐ, ATGT, TNGT, PCCN)', { i: true, ind: 284, before: 120 });
     b += P('I. Các đơn vị nhiệt điện', { b: true, keep: true }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => !p.other)) + det + lines(incs.concat(atvs));
     b += P('II. Các nhà máy điện khác', { b: true, keep: true, before: 120 }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => p.other)) + det + P('- Không có.', { ind: 567 });
-    b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban AT, KT-SX/EVNGENCO3;\n- Ban GĐ/EPS;\n- Các PXSC;\n- Lưu: KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'PHÒNG KỸ THUẬT – AN TOÀN/EPS', b: true }, ...(cfg.reporter ? [{ t: '\n\n\n\n\n' + cfg.reporter, b: true }] : [])], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
+    b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban AT, KT-SX/EVNGENCO3;\n- Ban GĐ/EPS;\n- Các PXSC;\n- Lưu: KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'PHÒNG KỸ THUẬT – AN TOÀN/EPS', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
     return DW.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
   }
   b += hdr([{ t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', sz: 12 }, { t: 'CÁC ĐƠN VỊ', b: true, sz: 12 }],
@@ -583,7 +583,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
     items.forEach((w, i) => rows.push([{ t: String(i + 1), al: 'center' }, w.t, { t: w.loc || '', al: 'center' }, { t: w.st === 'run' ? 'X' : '', al: 'center' }, { t: w.st === 'run' ? '' : 'X', al: 'center' }, w.note || '']));
   });
   b += T(rows, pw([5, 46, 13, 9, 9, 18]), { head: 1, sz: 12 });
-  b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }, { t: '\n\n\n\n\n' + (cfg.reporter || ''), b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
+  b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
   return DW.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 
