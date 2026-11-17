@@ -326,7 +326,7 @@ function renderTop() {
   E('tabs').innerHTML = tabs.map(([k, t]) => `<button data-act="tab" data-v="${k}" aria-current="${S.tab === k}">${t}</button>`).join('');
   paintSave();
 }
-function pxTabs(px) { return [['roster', 'Lịch ca trực'], ['tc', 'Tăng cường & huy động'], ...(px === 'gc-ph' ? [['congxa', 'Công xa']] : []), ['ot', 'Giờ làm thêm'], ['rep', 'Báo cáo ngày'], ['prj', 'Công trình'], ['legal', 'Văn bản pháp lý'], ['dir', 'Danh bạ SĐT']]; }
+function pxTabs(px) { return [['roster', 'Lịch ca trực'], ['tc', 'Tăng cường & huy động'], ...(px === 'gc-ph' ? [['congxa', 'Công xa']] : []), ['ot', 'Giờ làm thêm'], ['rep', 'Báo cáo ca trực'], ['prj', 'Công trình'], ['legal', 'Văn bản pháp lý'], ['dir', 'Danh bạ SĐT']]; }
 function viewTab() {
   if (isAdmin()) {
     switch (S.tab) {
@@ -936,13 +936,14 @@ function mutUnit(px, fn) { const u = px === 'lead' ? LU() : clone(U(px)); fn(u);
 function mutHol(fn) { const h = clone(H()); fn(h); saveHoliday(h); }
 const ACT = {
   repDate: el => { S.repDate = el.dataset.v; render(); },
-  repAdd: el => { mutRep(el.dataset.px, curRepDate(), r => { r.works = r.works || []; r.works.push({ t: '', loc: '', st: 'done', note: '' }); }); setTimeout(() => { const l = document.querySelectorAll('textarea[id^=rw_]'); if (l.length) l[l.length - 1].focus(); }, 30); },
-  repDel: el => mutRep(el.dataset.px, curRepDate(), r => { (r.works || []).splice(+el.dataset.i, 1); }),
-  repCopy: el => { const h = H(), date = curRepDate(), di = h.days.findIndex(d => d.date === date); const prev = repOf(U(el.dataset.px), h.days[di - 1].date).works || []; const run = prev.filter(w => w.t && w.st === 'run');
-    if (!run.length) { toast('Ngày trước không có việc đang thực hiện.'); return; }
-    mutRep(el.dataset.px, date, r => { r.works = r.works || []; const have = new Set(r.works.map(w => w.t)); run.forEach(w => { if (!have.has(w.t)) r.works.push(clone(w)); }); }); toast(`Đã chép ${run.length} việc đang thực hiện.`); },
+  repAdd: el => { mutRep(el.dataset.px, curRepKey(), r => { r.works = r.works || []; r.works.push({ t: '', loc: '', st: 'done', note: '' }); }); setTimeout(() => { const l = document.querySelectorAll('textarea[id^=rw_]'); if (l.length) l[l.length - 1].focus(); }, 30); },
+  repDel: el => mutRep(el.dataset.px, curRepKey(), r => { (r.works || []).splice(+el.dataset.i, 1); }),
+  repCopy: el => { const ks = shiftKeys(H()), key = curRepKey(), ki = ks.indexOf(key); const prev = repOf(U(el.dataset.px), ks[ki - 1]).works || []; const run = prev.filter(w => w.t && w.st === 'run');
+    if (!run.length) { toast('Ca trước không có việc đang thực hiện.'); return; }
+    mutRep(el.dataset.px, key, r => { r.works = r.works || []; const have = new Set(r.works.map(w => w.t)); run.forEach(w => { if (!have.has(w.t)) r.works.push(clone(w)); }); }); toast(`Đã chép ${run.length} việc đang thực hiện.`); },
+  repShift: el => { S.repKey = el.dataset.v; render(); },
   repPaste: el => { const t = E('rpaste'); const list = parsePaste(t && t.value); if (!list.length) { toast('Chưa có dòng nào để thêm.'); return; }
-    mutRep(el.dataset.px, curRepDate(), r => { r.works = (r.works || []).filter(w => w.t).concat(list); }); toast(`Đã thêm ${list.length} công tác.`); },
+    mutRep(el.dataset.px, curRepKey(), r => { r.works = (r.works || []).filter(w => w.t).concat(list); }); toast(`Đã thêm ${list.length} công tác.`); },
   repExport: el => repExport(el.dataset.k),
   impDo: () => { const P = S.panel; const R = P.res; let n = 0;
     mutPrj(P.px, P.id, p => { p.members = p.members || []; const have = new Set(p.members.map(m => m.sid).filter(Boolean)); const haveN = new Set(p.members.filter(m => !m.sid).map(m => normName(m.name)));
@@ -1042,9 +1043,9 @@ const ACT = {
 };
 const setPath = (o, path, v) => { const ks = path.split('.'); let x = o; ks.slice(0, -1).forEach(k => { x[k] = x[k] ?? (isNaN(+k) ? {} : []); x = x[k]; }); x[ks[ks.length - 1]] = v; };
 const CH = {
-  repPlant: el => { const px = el.dataset.px, k = el.dataset.k, date = curRepDate(); const cur = plantVal(allUnits(), H(), date, k).v; mutRep(px, date, r => { r.plants = r.plants || {}; const e = Object.assign({}, cur, r.plants[k] || {}); delete e.ts; e[el.dataset.f] = el.value.trim() || '-'; e.ts = Date.now(); r.plants[k] = e; }); },
-  repTxt: el => mutRep(el.dataset.px, curRepDate(), r => { r[el.dataset.f] = el.value.trim(); }),
-  repWork: el => mutRep(el.dataset.px, curRepDate(), r => { const w = (r.works || [])[+el.dataset.i]; if (!w) return; const f = el.dataset.f; w[f] = f === 'g' ? +el.value : el.value.trim(); }),
+  repPlant: el => { const px = el.dataset.px, k = el.dataset.k, date = curRepKey(); const cur = plantVal(allUnits(), H(), date, k).v; mutRep(px, date, r => { r.plants = r.plants || {}; const e = Object.assign({}, cur, r.plants[k] || {}); delete e.ts; e[el.dataset.f] = el.value.trim() || '-'; e.ts = Date.now(); r.plants[k] = e; }); },
+  repTxt: el => mutRep(el.dataset.px, curRepKey(), r => { r[el.dataset.f] = el.value.trim(); }),
+  repWork: el => mutRep(el.dataset.px, curRepKey(), r => { const w = (r.works || [])[+el.dataset.i]; if (!w) return; const f = el.dataset.f; w[f] = f === 'g' ? +el.value : el.value.trim(); }),
   repCfg: el => mutUnit('lead', u => { u.repCfg = Object.assign({}, u.repCfg || {}, { [el.dataset.f]: el.value.trim() }); }),
   prjXl: async el => { const f = el.files && el.files[0]; const px = el.dataset.px, id = el.dataset.id; el.value = ''; if (!f) return;
     if (typeof XLSX === 'undefined') { toast('Chức năng này chỉ có trên bản web.'); return; }
@@ -1130,30 +1131,35 @@ function allUnits() { const o = Object.fromEntries(PX.map(p => [p.id, U(p.id)]))
 function curRepDate() { const ds = H().days.map(d => d.date); if (S.repDate && ds.includes(S.repDate)) return S.repDate; const t = todayIso(); return ds.includes(t) ? t : t > ds[ds.length - 1] ? ds[ds.length - 1] : ds[0]; }
 function repDateBar() { const cur = curRepDate(); return `<div class="seg" role="group" aria-label="Ngày báo cáo">${H().days.map(d => `<button data-act="repDate" data-v="${d.date}" aria-pressed="${d.date === cur}">${wdShort(d.date)} ${dm(d.date)}</button>`).join('')}</div>`; }
 function repSpan(date) { const day = H().days.find(d => d.date === date) || {}; return `Từ ${day.ca1 === false ? '19h00' : '07h00'} ngày ${dmy(date)} đến 07h00 ngày ${dmy(nextIso(date))}`; }
+function curRepKey() { const ks = shiftKeys(H()); if (S.repKey && ks.includes(S.repKey)) return S.repKey; const n = new Date(), hr = n.getHours(); const t = todayIso();
+  const y = (() => { const d = new Date(n); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const want = hr < 7 ? `${y}|c2` : hr < 19 ? `${t}|c1` : `${t}|c2`; if (ks.includes(want)) return want; if (hr >= 7 && hr < 19 && ks.includes(`${t}|c2`)) return `${t}|c2`; return want > ks[ks.length - 1] ? ks[ks.length - 1] : ks[0]; }
+function repShiftBar() { const cur = curRepKey(); return `<div class="seg" role="group" aria-label="Ca báo cáo">${shiftKeys(H()).map(k => `<button data-act="repShift" data-v="${k}" aria-pressed="${k === cur}">${shiftLabel(k)}</button>`).join('')}</div>`; }
+function shiftSpan(key) { const [d, c] = key.split('|'); return c === 'c1' ? `Ca ngày: 07h00 – 19h00 ngày ${dmy(d)}` : `Ca đêm: 19h00 ngày ${dmy(d)} – 07h00 ngày ${dmy(nextIso(d))}`; }
 function canEditRep(px) { return isAdmin() || myPx() === px; }
 function mutRep(px, date, fn) { mutUnit(px, u => { u.rep = u.rep || {}; const r = u.rep[date] = u.rep[date] || {}; fn(r, u); }); }
 function viewRep(px) {
-  const h = H(), date = curRepDate(), u = U(px), r = repOf(u, date), ed = canEditRep(px), dis = ed ? '' : 'disabled', units = allUnits();
-  const plants = PLANTS.filter(p => p.a === PXI[px].area); const works = r.works || []; const di = h.days.findIndex(d => d.date === date);
+  const h = H(), date = curRepKey(), u = U(px), r = repOf(u, date), ed = canEditRep(px), dis = ed ? '' : 'disabled', units = allUnits();
+  const plants = PLANTS.filter(p => p.a === PXI[px].area); const works = r.works || []; const ks = shiftKeys(h), di = ks.indexOf(date);
   const mates = PX.filter(p => p.area === PXI[px].area && p.id !== px).map(p => p.short);
-  let html = `<section class="card stack"><div class="row between"><div><h2>Báo cáo trực lễ · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}. Nhập trong ngày; Phòng KT-AT tổng hợp và xuất báo cáo gửi TCT và báo cáo nội bộ.</p></div>${repDateBar()}</div></section>`;
-  if (plants.length) html += `<section class="card stack"><h2>1. Tình hình nhà máy</h2><p class="hint">Ô chưa sửa lấy theo ngày trước (hoặc mặc định "Bình thường"). ${mates.length ? `${esc(mates.join(', '))} cùng cập nhật bảng này; ứng dụng lấy nội dung sửa sau cùng.` : ''}</p>
+  let html = `<section class="card stack"><div class="row between"><div><h2>Báo cáo ca trực · ${shiftLabel(date)}/${date.slice(0, 4)}</h2><p class="hint">${shiftSpan(date)}. Nhập trước khi giao ca; Phòng KT-AT gộp ca ngày và ca đêm thành báo cáo ngày gửi TCT và báo cáo nội bộ.</p></div>${repShiftBar()}</div></section>`;
+  if (plants.length) html += `<section class="card stack"><h2>1. Tình hình nhà máy</h2><p class="hint">Ô chưa sửa lấy theo ca trước (hoặc mặc định "Bình thường"). ${mates.length ? `${esc(mates.join(', '))} cùng cập nhật bảng này; ứng dụng lấy nội dung sửa sau cùng.` : ''}</p>
     <div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${plants.map(p => { const pv = plantVal(units, h, date, p.k);
-      const src = pv.from && pv.from !== date ? `theo ngày ${dm(pv.from)}` : pv.by && pv.by !== px ? `${PXI[pv.by].short} cập nhật` : pv.from ? '' : 'mặc định';
+      const src = pv.from && pv.from !== date ? `theo ${shiftLabel(pv.from).toLowerCase()}` : pv.by && pv.by !== px ? `${PXI[pv.by].short} cập nhật` : pv.from ? '' : 'mặc định';
       return `<tr><td><b>${esc(p.n)}</b>${src ? `<br><small class="hint">${esc(src)}</small>` : ''}</td>${PFIELDS.map(f => `<td><textarea id="pl_${p.k}_${f[0]}" rows="1" data-ch="repPlant" data-px="${px}" data-k="${p.k}" data-f="${f[0]}" ${dis} aria-label="${esc(p.n)} - ${f[1]}">${esc(pv.v[f[0]] || '')}</textarea></td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>`;
   html += `<section class="card stack"><h2>${plants.length ? 2 : 1}. Bất thường, sự cố và AT-VSLĐ</h2><p class="hint">Để trống nếu không có; báo cáo sẽ ghi "Không có".</p>
     <label class="field"><span>Chi tiết bất thường, sự cố thiết bị (nếu có)</span><textarea id="rinc" rows="2" data-ch="repTxt" data-px="${px}" data-f="inc" ${dis}>${esc(r.inc || '')}</textarea></label>
     <label class="field"><span>Vi phạm AT-VSLĐ, PCCN, ATGT, TNGT (nếu có)</span><textarea id="ratv" rows="2" data-ch="repTxt" data-px="${px}" data-f="atv" ${dis}>${esc(r.atv || '')}</textarea></label></section>`;
   const gsel = (w, i) => px === 'cc-vt' || px === 'cd-vt' ? `<select id="rg_${i}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="g" ${dis} aria-label="Nhà máy">${['NMNĐ VT2', 'NMNĐ VT4'].map((t, g) => `<option value="${g}" ${(w.g || 0) === g ? 'selected' : ''}>${t}</option>`).join('')}</select>` : '';
-  html += `<section class="card stack"><div class="row between"><h2>${plants.length ? 3 : 2}. Các công tác trong ca trực (${works.filter(w => w.t).length})</h2>
-      ${ed && di > 0 ? `<button class="btn sm" data-act="repCopy" data-px="${px}">Chép việc đang thực hiện từ ngày ${dm(h.days[di - 1].date)}</button>` : ''}</div>
+  html += `<section class="card stack"><div class="row between"><h2>${plants.length ? 3 : 2}. Các công tác trong ca (${works.filter(w => w.t).length})</h2>
+      ${ed && di > 0 ? `<button class="btn sm" data-act="repCopy" data-px="${px}">Chép việc đang thực hiện từ ${shiftLabel(ks[di - 1]).toLowerCase()}</button>` : ''}</div>
     ${works.length ? `<div class="tbl scroll"><table class="list repw"><thead><tr><th>#</th><th>Nội dung công tác</th><th>Vị trí</th>${gsel({}, -1) ? '<th>Nhà máy</th>' : ''}<th>Kết quả</th><th>Ghi chú</th><th></th></tr></thead><tbody>${works.map((w, i) => `<tr>
       <td>${i + 1}</td><td><textarea id="rw_${i}" rows="1" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="t" ${dis} aria-label="Nội dung công tác ${i + 1}">${esc(w.t || '')}</textarea></td>
       <td><input id="rl_${i}" type="text" value="${esc(w.loc || '')}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="loc" ${dis} aria-label="Vị trí" style="width:110px"></td>
       ${gsel(w, i) ? `<td>${gsel(w, i)}</td>` : ''}
       <td><select id="rs_${i}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="st" ${dis} aria-label="Kết quả"><option value="done" ${w.st !== 'run' ? 'selected' : ''}>Hoàn thành</option><option value="run" ${w.st === 'run' ? 'selected' : ''}>Đang thực hiện</option></select></td>
       <td><input id="rn_${i}" type="text" value="${esc(w.note || '')}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="note" ${dis} aria-label="Ghi chú" placeholder="vd: 40%"></td>
-      <td>${ed ? `<button class="x" data-act="repDel" data-px="${px}" data-i="${i}" aria-label="Xóa">×</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Chưa có công tác nào trong ngày.</p>'}
+      <td>${ed ? `<button class="x" data-act="repDel" data-px="${px}" data-i="${i}" aria-label="Xóa">×</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Chưa có công tác nào trong ca.</p>'}
     ${ed ? `<div class="row"><button class="add grow" data-act="repAdd" data-px="${px}">+ Thêm công tác</button></div>
     <details><summary class="hint">Dán nhiều dòng từ Excel/Zalo</summary><div class="stack" style="margin-top:8px"><p class="hint">Mỗi dòng một công tác. Nếu chép từ Excel, các cột theo thứ tự: Nội dung · Vị trí · Kết quả (Hoàn thành/Đang thực hiện hoặc X) · Ghi chú.</p>
       <textarea id="rpaste" rows="4" placeholder="Vệ sinh lược nước chèn ST43	ST43/PM4	Hoàn thành"></textarea><div class="row"><button class="btn" data-act="repPaste" data-px="${px}">Thêm các dòng đã dán</button></div></div></details>` : ''}</section>`;
@@ -1161,8 +1167,8 @@ function viewRep(px) {
 }
 function viewRepAll() {
   const h = H(), date = curRepDate(), units = allUnits(), cfg = repCfg(units, h); const ed = isAdmin() || isLeadRole(); const dis = ed ? '' : 'disabled';
-  const rows = PX.map(p => { const r = repOf(units[p.id], date); const n = (r.works || []).filter(w => w.t).length; const pl = PX.filter(q => q.area === p.area).some(q => PLANTS.filter(x => x.a === p.area).some(x => ((repOf(units[q.id], date).plants || {})[x.k])));
-    return `<tr><td><b>${esc(p.short)}</b></td><td class="num">${n || '–'}</td><td>${PLANTS.some(x => x.a === p.area) ? (pl ? 'Đã cập nhật' : '<span class="hint">Theo ngày trước</span>') : '<span class="hint">—</span>'}</td><td>${r.inc ? esc(r.inc) : '<span class="hint">Không</span>'}</td><td>${r.atv ? esc(r.atv) : '<span class="hint">Không</span>'}</td></tr>`; }).join('');
+  const DK = dayKeys(h, date); const rows = PX.map(p => { const rr = DK.map(k => repOf(units[p.id], k)); const r = { inc: rr.map(x => x.inc).filter(Boolean).join('; '), atv: rr.map(x => x.atv).filter(Boolean).join('; ') }; const n = DK.map(k => `${k.endsWith('c1') ? 'Ngày' : 'Đêm'}: ${(repOf(units[p.id], k).works || []).filter(w => w.t).length}`).join(' · '); const pl = PX.filter(q => q.area === p.area).some(q => PLANTS.filter(x => x.a === p.area).some(x => DK.some(k => (repOf(units[q.id], k).plants || {})[x.k])));
+    return `<tr><td><b>${esc(p.short)}</b></td><td>${n}</td><td>${PLANTS.some(x => x.a === p.area) ? (pl ? 'Đã cập nhật' : '<span class="hint">Theo ngày trước</span>') : '<span class="hint">—</span>'}</td><td>${r.inc ? esc(r.inc) : '<span class="hint">Không</span>'}</td><td>${r.atv ? esc(r.atv) : '<span class="hint">Không</span>'}</td></tr>`; }).join('');
   return `<section class="card stack"><div class="row between"><div><h2>Báo cáo trực lễ · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}</p></div>${repDateBar()}</div>
     <div class="row"><button class="btn primary" data-act="repExport" data-k="eps">Xuất báo cáo nội bộ EPS (Word)</button><button class="btn primary" data-act="repExport" data-k="tct">Xuất báo cáo gửi TCT (Word)</button></div></section>
   <section class="card stack"><h2>Thông tin chung trên báo cáo</h2>
@@ -1170,7 +1176,7 @@ function viewRepAll() {
       <label class="field grow" style="min-width:260px"><span>Căn cứ văn bản (số, ngày) – bản gửi TCT</span><input id="rc_ref" type="text" value="${esc(cfg.ref)}" placeholder="vd: 2770/GENCO3-KT-AT&MT ngày 17/08/2026" data-ch="repCfg" data-f="ref" ${dis}></label>
       <label class="field" style="min-width:220px"><span>Tên dịp lễ trên báo cáo</span><input id="rc_title" type="text" value="${esc(cfg.title)}" data-ch="repCfg" data-f="title" ${dis}></label>
       <label class="field"><span>Địa danh</span><input id="rc_place" type="text" value="${esc(cfg.place)}" data-ch="repCfg" data-f="place" ${dis} style="width:120px"></label></div></section>
-  <section class="card stack"><h2>Tình hình nhập của các phân xưởng</h2><div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th class="num">Công tác</th><th>Tình hình nhà máy</th><th>Bất thường, sự cố</th><th>AT-VSLĐ, PCCN</th></tr></thead><tbody>${rows}</tbody></table></div></section>
+  <section class="card stack"><h2>Tình hình nhập của các phân xưởng</h2><div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th>Công tác (theo ca)</th><th>Tình hình nhà máy</th><th>Bất thường, sự cố</th><th>AT-VSLĐ, PCCN</th></tr></thead><tbody>${rows}</tbody></table></div></section>
   <section class="card stack"><h2>Tình hình chung các nhà máy</h2><div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${PLANTS.map(p => { const v = plantVal(units, h, date, p.k).v; return `<tr><td><b>${esc(p.n)}</b></td>${PFIELDS.map(f => `<td>${esc(v[f[0]] || '-')}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>`;
 }
 async function repExport(kind) {

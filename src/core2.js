@@ -494,10 +494,15 @@ const PFIELDS = [['run', 'Tổ máy vận hành'], ['sb', 'Tổ máy dự phòng
 const plantDef = k => ({ run: k === 'dmt' ? 'Bình thường' : '-', sb: '-', rep: '-', fault: 'Không', st: 'Bình thường', sec: 'Tốt', at: 'Bình thường', pc: 'Bình thường' });
 const repOf = (u, date) => ((u && u.rep) || {})[date] || {};
 /* Giá trị một nhà máy trong ngày: lấy bản sửa sau cùng của các PX cùng khu vực; chưa nhập thì lấy ngày trước đó */
-function plantVal(units, H, date, k) {
+/* Báo cáo nhập theo từng ca trực: khóa "yyyy-mm-dd|c1" (ca ngày) hoặc "yyyy-mm-dd|c2" (ca đêm) */
+const shiftKeys = H => H.days.flatMap(d => caList(d).map(c => `${d.date}|${c}`));
+const dayKeys = (H, date) => { const d = H.days.find(x => x.date === date); return d ? caList(d).map(c => `${date}|${c}`) : []; };
+const shiftLabel = key => { const [d, c] = key.split('|'); return `${c === 'c1' ? 'Ca ngày' : 'Ca đêm'} ${dm(d)}`; };
+/* Giá trị một nhà máy tại một ca (hoặc cuối ngày nếu truyền ngày): lấy bản sửa sau cùng của các PX cùng khu vực; ca chưa nhập thì lấy ca trước */
+function plantVal(units, H, key, k) {
   const pl = PLANTS.find(p => p.k === k); const ids = PX.filter(p => p.area === pl.a).map(p => p.id);
-  const days = H.days.map(d => d.date).filter(d => d <= date).reverse();
-  for (const d of days) { let best = null, by = null; ids.forEach(id => { const e = (repOf(units[id], d).plants || {})[k]; if (e && (!best || (e.ts || 0) > (best.ts || 0))) { best = e; by = id; } }); if (best) return { v: Object.assign(plantDef(k), best), from: d, by }; }
+  const all = shiftKeys(H); const end = key.includes('|') ? key : (dayKeys(H, key).slice(-1)[0] || key); const keys = all.filter(x => x <= end).reverse();
+  for (const d of keys) { let best = null, by = null; ids.forEach(id => { const e = (repOf(units[id], d).plants || {})[k]; if (e && (!best || (e.ts || 0) > (best.ts || 0))) { best = e; by = id; } }); if (best) return { v: Object.assign(plantDef(k), best), from: d, by }; }
   return { v: plantDef(k), from: null, by: null };
 }
 const nextIso = s => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
@@ -548,8 +553,8 @@ function buildRepDoc(kind, H, units, date, ctx) {
   const plantTable = list => T([[...['Stt', 'Nhà máy', ...PFIELDS.map(f => kind === 'tct' && f[0] === 'fault' ? 'Thiết bị sự cố' : f[1])].map(t => ({ t, b: true, al: 'center', fill: 'F2F2F2' }))],
     ...list.map((p, i) => { const v = plantVal(units, H, date, p.k).v; return [{ t: String(i + 1), al: 'center' }, { t: p.n, b: true }, ...PFIELDS.map(f => ({ t: v[f[0]] || '-', al: 'center' }))]; })], pw([4, 13, 12, 11, 11, 10, 10, 8, 11, 10]), { head: 1, sz: 12 });
   const ids = PX.map(p => p.id);
-  const incs = ids.map(id => [PXI[id].name, (repOf(units[id], date).inc || '').trim()]).filter(x => x[1]);
-  const atvs = ids.map(id => [PXI[id].name, (repOf(units[id], date).atv || '').trim()]).filter(x => x[1]);
+  const DK = dayKeys(H, date); const txt = f => ids.flatMap(id => DK.map(k => [PXI[id].name + (DK.length > 1 ? ` (${k.endsWith('c1') ? 'ca ngày' : 'ca đêm'})` : ''), (repOf(units[id], k)[f] || '').trim()])).filter(x => x[1]);
+  const incs = txt('inc'), atvs = txt('atv');
   const lines = arr => arr.length ? arr.map(([n, t]) => P([{ t: `- ${n}: `, b: true }, t], { ind: 567 })).join('') : P('- Không có.', { ind: 567 });
   const dateLine = `${cfg.place}, ngày ${d} tháng ${m} năm ${y}`;
   let b = '';
@@ -577,7 +582,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
   b += P('4. Các công tác trong ca trực:', { b: true, before: 120, keep: true });
   const rows = [['Stt', 'Nội dung công tác', 'Vị trí', 'Đang thực hiện', 'Hoàn thành', 'Ghi chú'].map(t => ({ t, b: true, al: 'center', fill: 'F2F2F2' }))];
   repSections(units).forEach(sec => {
-    const items = []; sec.src.forEach(([id, g]) => (repOf(units[id], date).works || []).forEach(w => { if (!w.t) return; if (g != null && (w.g || 0) !== g) return; items.push(w); }));
+    const items = []; sec.src.forEach(([id, g]) => DK.flatMap(k => repOf(units[id], k).works || []).forEach(w => { if (!w.t) return; if (g != null && (w.g || 0) !== g) return; items.push(w); }));
     rows.push([{ t: sec.h, b: true, span: 6, fill: 'FAFAFA' }]);
     if (!items.length) rows.push([{ t: '', al: 'center' }, { t: 'Không có công tác phát sinh', i: true }, '', '', '', '']);
     items.forEach((w, i) => rows.push([{ t: String(i + 1), al: 'center' }, w.t, { t: w.loc || '', al: 'center' }, { t: w.st === 'run' ? 'X' : '', al: 'center' }, { t: w.st === 'run' ? '' : 'X', al: 'center' }, w.note || '']));
@@ -587,4 +592,4 @@ function buildRepDoc(kind, H, units, date, ctx) {
   return DW.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 
-if (typeof module !== 'undefined') module.exports = { PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
