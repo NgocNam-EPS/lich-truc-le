@@ -147,6 +147,12 @@ table.mx td{padding:0;vertical-align:top}
 .cellb{width:100%;min-height:58px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);padding:6px 8px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
 .cellb:hover{border-color:var(--accent)}
 .cellb b{font-size:12.5px;font-weight:600;line-height:1.3}.cellb small{font-size:11.5px;color:var(--muted)}
+.uchips{display:flex;flex-wrap:wrap;gap:4px}
+.uchip{font:600 12px/1 inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--line,#d6dcd9);background:var(--card,#fff);color:var(--muted,#667);cursor:pointer;min-width:40px}
+.uchip:disabled{cursor:default;opacity:.7}
+.uchip.on.run{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.uchip.on.sb{background:#2f6fb0;border-color:#2f6fb0;color:#fff}
+.uchip.on.rep{background:#b5532a;border-color:#b5532a;color:#fff}
 .rept textarea{field-sizing:content;min-height:34px;min-width:96px;font-size:13px;padding:4px 6px;resize:vertical}
 .rept td{vertical-align:top}
 .rept td:first-child{min-width:130px}
@@ -935,6 +941,9 @@ function outForm(e, gc, u) {
 function mutUnit(px, fn) { const u = px === 'lead' ? LU() : clone(U(px)); fn(u); saveUnit(px, u); }
 function mutHol(fn) { const h = clone(H()); fn(h); saveHoliday(h); }
 const ACT = {
+  repUnit: el => { const px = el.dataset.px, k = el.dataset.k, key = curRepKey(); const pl = PLANTS.find(p => p.k === k); const cur = plantVal(allUnits(), H(), key, k).v; const us = unitStates(pl, cur); const note = repNoteOf(pl, cur);
+    if (us[el.dataset.u] === el.dataset.s) delete us[el.dataset.u]; else us[el.dataset.u] = el.dataset.s;
+    mutRep(px, key, r => { r.plants = r.plants || {}; r.plants[k] = Object.assign({}, cur, unitStrings(pl, us, note), { units: us, repNote: note, ts: Date.now() }); }); },
   repDate: el => { S.repDate = el.dataset.v; render(); },
   repAdd: el => { mutRep(el.dataset.px, curRepKey(), r => { r.works = r.works || []; r.works.push({ t: '', loc: '', st: 'done', note: '' }); }); setTimeout(() => { const l = document.querySelectorAll('textarea[id^=rw_]'); if (l.length) l[l.length - 1].focus(); }, 30); },
   repDel: el => mutRep(el.dataset.px, curRepKey(), r => { (r.works || []).splice(+el.dataset.i, 1); }),
@@ -1043,7 +1052,9 @@ const ACT = {
 };
 const setPath = (o, path, v) => { const ks = path.split('.'); let x = o; ks.slice(0, -1).forEach(k => { x[k] = x[k] ?? (isNaN(+k) ? {} : []); x = x[k]; }); x[ks[ks.length - 1]] = v; };
 const CH = {
-  repPlant: el => { const px = el.dataset.px, k = el.dataset.k, date = curRepKey(); const cur = plantVal(allUnits(), H(), date, k).v; mutRep(px, date, r => { r.plants = r.plants || {}; const e = Object.assign({}, cur, r.plants[k] || {}); delete e.ts; e[el.dataset.f] = el.value.trim() || '-'; e.ts = Date.now(); r.plants[k] = e; }); },
+  repRepNote: el => { const px = el.dataset.px, k = el.dataset.k, key = curRepKey(); const pl = PLANTS.find(p => p.k === k); const cur = plantVal(allUnits(), H(), key, k).v; const us = unitStates(pl, cur); const note = el.value.trim();
+    mutRep(px, key, r => { r.plants = r.plants || {}; r.plants[k] = Object.assign({}, cur, unitStrings(pl, us, note), { units: us, repNote: note, ts: Date.now() }); }); },
+  repPlant: el => { const px = el.dataset.px, k = el.dataset.k, date = curRepKey(); const cur = plantVal(allUnits(), H(), date, k).v; mutRep(px, date, r => { r.plants = r.plants || {}; const e = Object.assign({}, cur, r.plants[k] || {}); delete e.ts; if (['run', 'sb', 'rep'].includes(el.dataset.f)) { delete e.units; delete e.repNote; } e[el.dataset.f] = el.value.trim() || '-'; e.ts = Date.now(); r.plants[k] = e; }); },
   repTxt: el => mutRep(el.dataset.px, curRepKey(), r => { r[el.dataset.f] = el.value.trim(); }),
   repWork: el => mutRep(el.dataset.px, curRepKey(), r => { const w = (r.works || [])[+el.dataset.i]; if (!w) return; const f = el.dataset.f; w[f] = f === 'g' ? +el.value : el.value.trim(); }),
   repCfg: el => mutUnit('lead', u => { u.repCfg = Object.assign({}, u.repCfg || {}, { [el.dataset.f]: el.value.trim() }); }),
@@ -1143,10 +1154,13 @@ function viewRep(px) {
   const plants = PLANTS.filter(p => p.a === PXI[px].area); const works = r.works || []; const ks = shiftKeys(h), di = ks.indexOf(date);
   const mates = PX.filter(p => p.area === PXI[px].area && p.id !== px).map(p => p.short);
   let html = `<section class="card stack"><div class="row between"><div><h2>Báo cáo ca trực · ${shiftLabel(date)}/${date.slice(0, 4)}</h2><p class="hint">${shiftSpan(date)}. Nhập trước khi giao ca; Phòng KT-AT gộp ca ngày và ca đêm thành báo cáo ngày gửi TCT và báo cáo nội bộ.</p></div>${repShiftBar()}</div></section>`;
-  if (plants.length) html += `<section class="card stack"><h2>1. Tình hình nhà máy</h2><p class="hint">Ô chưa sửa lấy theo ca trước (hoặc mặc định "Bình thường"). ${mates.length ? `${esc(mates.join(', '))} cùng cập nhật bảng này; ứng dụng lấy nội dung sửa sau cùng.` : ''}</p>
-    <div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${plants.map(p => { const pv = plantVal(units, h, date, p.k);
+  if (plants.length) html += `<section class="card stack"><h2>1. Tình hình nhà máy</h2><p class="hint">Bấm tên tổ máy ở cột Vận hành, Dự phòng hoặc Sửa chữa để chọn trạng thái (bấm lại để bỏ chọn). Ô chưa sửa lấy theo ca trước (hoặc mặc định "Bình thường"). ${mates.length ? `${esc(mates.join(', '))} cùng cập nhật bảng này; ứng dụng lấy nội dung sửa sau cùng.` : ''}</p>
+    <div class="tbl" style="overflow-x:auto"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${plants.map(p => { const pv = plantVal(units, h, date, p.k);
       const src = pv.from && pv.from !== date ? `theo ${shiftLabel(pv.from).toLowerCase()}` : pv.by && pv.by !== px ? `${PXI[pv.by].short} cập nhật` : pv.from ? '' : 'mặc định';
-      return `<tr><td><b>${esc(p.n)}</b>${src ? `<br><small class="hint">${esc(src)}</small>` : ''}</td>${PFIELDS.map(f => `<td><textarea id="pl_${p.k}_${f[0]}" rows="1" data-ch="repPlant" data-px="${px}" data-k="${p.k}" data-f="${f[0]}" ${dis} aria-label="${esc(p.n)} - ${f[1]}">${esc(pv.v[f[0]] || '')}</textarea></td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>`;
+      const us = p.u.length ? unitStates(p, pv.v) : null;
+      const cell = f => us && ['run', 'sb', 'rep'].includes(f[0]) ? `<td><div class="uchips">${p.u.map(x => `<button class="uchip ${us[x] === f[0] ? 'on ' + f[0] : ''}" data-act="repUnit" data-px="${px}" data-k="${p.k}" data-u="${x}" data-s="${f[0]}" ${dis} aria-pressed="${us[x] === f[0]}" title="${esc(x)}: ${f[1]}">${esc(x)}</button>`).join('')}</div>${f[0] === 'rep' ? `<input id="pl_${p.k}_repn" type="text" value="${esc(repNoteOf(p, pv.v))}" placeholder="Ghi chú, vd: (đại tu)" data-ch="repRepNote" data-px="${px}" data-k="${p.k}" ${dis} aria-label="${esc(p.n)} - ghi chú sửa chữa" style="margin-top:6px;width:100%;font-size:12.5px;padding:4px 6px">` : ''}</td>`
+        : `<td><textarea id="pl_${p.k}_${f[0]}" rows="1" data-ch="repPlant" data-px="${px}" data-k="${p.k}" data-f="${f[0]}" ${dis} aria-label="${esc(p.n)} - ${f[1]}">${esc(pv.v[f[0]] || '')}</textarea></td>`;
+      return `<tr><td><b>${esc(p.n)}</b>${src ? `<br><small class="hint">${esc(src)}</small>` : ''}</td>${PFIELDS.map(cell).join('')}</tr>`; }).join('')}</tbody></table></div></section>`;
   html += `<section class="card stack"><h2>${plants.length ? 2 : 1}. Bất thường, sự cố và AT-VSLĐ</h2><p class="hint">Để trống nếu không có; báo cáo sẽ ghi "Không có".</p>
     <label class="field"><span>Chi tiết bất thường, sự cố thiết bị (nếu có)</span><textarea id="rinc" rows="2" data-ch="repTxt" data-px="${px}" data-f="inc" ${dis}>${esc(r.inc || '')}</textarea></label>
     <label class="field"><span>Vi phạm AT-VSLĐ, PCCN, ATGT, TNGT (nếu có)</span><textarea id="ratv" rows="2" data-ch="repTxt" data-px="${px}" data-f="atv" ${dis}>${esc(r.atv || '')}</textarea></label></section>`;

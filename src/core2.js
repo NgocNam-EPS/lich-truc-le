@@ -487,9 +487,21 @@ function buildPRJ(ctx, pxFilter) {
 
 /* ===== Báo cáo trực lễ hằng ngày (Word): bản gửi TCT và bản nội bộ EPS ===== */
 const PLANTS = [
-  { k: 'pm1', n: 'Phú Mỹ 1', a: 'PM' }, { k: 'pm21', n: 'Phú Mỹ 2.1 & 2.1 mở rộng', a: 'PM' }, { k: 'pm22', n: 'Phú Mỹ 2.2', a: 'PM' },
-  { k: 'pm3', n: 'Phú Mỹ 3', a: 'PM' }, { k: 'pm4', n: 'Phú Mỹ 4', a: 'PM' }, { k: 'vt2', n: 'Vĩnh Tân 2', a: 'VT' },
-  { k: 'dmt', n: 'ĐMT Vĩnh Tân 2', a: 'VT', other: true }, { k: 'vt4', n: 'Vĩnh Tân 4 và Vĩnh Tân 4 MR', a: 'VT' }, { k: 'md1', n: 'Mông Dương 1', a: 'MD' }];
+  { k: 'pm1', n: 'Phú Mỹ 1', a: 'PM', u: ['GT11', 'GT12', 'GT13', 'ST14'] }, { k: 'pm21', n: 'Phú Mỹ 2.1 & 2.1 mở rộng', a: 'PM', u: ['GT21', 'GT22', 'ST23', 'GT24', 'GT25', 'ST26'] },
+  { k: 'pm22', n: 'Phú Mỹ 2.2', a: 'PM', u: ['GT1', 'GT2', 'ST3'] }, { k: 'pm3', n: 'Phú Mỹ 3', a: 'PM', u: ['GT31', 'GT32', 'ST33'] }, { k: 'pm4', n: 'Phú Mỹ 4', a: 'PM', u: ['GT41', 'GT42', 'ST43'] },
+  { k: 'vt2', n: 'Vĩnh Tân 2', a: 'VT', u: ['S1', 'S2'] }, { k: 'dmt', n: 'ĐMT Vĩnh Tân 2', a: 'VT', other: true, u: [] },
+  { k: 'vt4', n: 'Vĩnh Tân 4 và Vĩnh Tân 4 MR', a: 'VT', u: ['S1', 'S2', 'S3'] }, { k: 'md1', n: 'Mông Dương 1', a: 'MD', u: ['S1', 'S2'] }];
+/* Trạng thái từng tổ máy (run: vận hành, sb: dự phòng, rep: sửa chữa); bản cũ chỉ có chuỗi thì dò tên tổ máy trong chuỗi */
+function unitStates(pl, v) {
+  if (v.units) return Object.assign({}, v.units);
+  const o = {}; const has = (t, u) => new RegExp('(^|[^A-Z0-9])' + u + '(?![0-9])').test(String(t || '').toUpperCase());
+  pl.u.forEach(u => { ['run', 'sb', 'rep'].forEach(f => { if (!o[u] && has(v[f], u)) o[u] = f; }); }); return o;
+}
+function unitStrings(pl, units, repNote) {
+  const pick = f => pl.u.filter(u => units[u] === f).join(', ');
+  const rep = pick('rep'); return { run: pick('run') || '-', sb: pick('sb') || '-', rep: rep ? rep + (repNote ? ' ' + repNote : '') : (repNote || '-') };
+}
+function repNoteOf(pl, v) { if (v.repNote != null) return v.repNote; const s = String(v.rep || ''); const m = s.match(/\(.*\)\s*$/s); return m ? m[0].replace(/\s+/g, ' ') : ''; }
 const PFIELDS = [['run', 'Tổ máy vận hành'], ['sb', 'Tổ máy dự phòng'], ['rep', 'Tổ máy sửa chữa'], ['fault', 'Thiết bị, vị trí sự cố'], ['st', 'Trạm điện'], ['sec', 'Bảo vệ an ninh'], ['at', 'ATVSLĐ/ ATGT/ TNGT'], ['pc', 'PCCN']];
 const plantDef = k => ({ run: k === 'dmt' ? 'Bình thường' : '-', sb: '-', rep: '-', fault: 'Không', st: 'Bình thường', sec: 'Tốt', at: 'Bình thường', pc: 'Bình thường' });
 const repOf = (u, date) => ((u && u.rep) || {})[date] || {};
@@ -592,4 +604,4 @@ function buildRepDoc(kind, H, units, date, ctx) {
   return DW.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 
-if (typeof module !== 'undefined') module.exports = { shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { unitStates, unitStrings, shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
