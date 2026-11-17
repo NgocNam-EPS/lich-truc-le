@@ -148,6 +148,12 @@ table.mx td{padding:0;vertical-align:top}
 .cellb{width:100%;min-height:58px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);padding:6px 8px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
 .cellb:hover{border-color:var(--accent)}
 .cellb b{font-size:12.5px;font-weight:600;line-height:1.3}.cellb small{font-size:11.5px;color:var(--muted)}
+.rept textarea{field-sizing:content;min-height:34px;min-width:96px;font-size:13px;padding:4px 6px;resize:vertical}
+.rept td{vertical-align:top}
+.rept td:first-child{min-width:130px}
+.repw textarea{field-sizing:content;min-height:34px;min-width:300px;width:100%;font-size:13px;padding:4px 6px;resize:vertical}
+.repw td{vertical-align:top}
+.repw input,.repw select{font-size:13px}
 .cellb .cld{display:block;white-space:normal;margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed rgba(0,0,0,.12);font-size:12px;color:var(--ink-2,#444)}
 .cellb .cld b{font-weight:600;color:inherit;display:inline}
 .cellb .cph{display:block;font-size:12px;font-weight:600;color:var(--accent,#0f6b4f);font-variant-numeric:tabular-nums;letter-spacing:.2px}
@@ -299,7 +305,7 @@ const XW = (() => {
       return zip(files);
     }
   }
-  return { Book };
+  return { Book, zip };
 })();
 if (typeof module !== 'undefined') module.exports = { XW };
 
@@ -790,7 +796,109 @@ function buildPRJ(ctx, pxFilter) {
   ws.autoHeights(18, 16); return wb;
 }
 
-if (typeof module !== 'undefined') module.exports = { optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+/* ===== Báo cáo trực lễ hằng ngày (Word): bản gửi TCT và bản nội bộ EPS ===== */
+const PLANTS = [
+  { k: 'pm1', n: 'Phú Mỹ 1', a: 'PM' }, { k: 'pm21', n: 'Phú Mỹ 2.1 & 2.1 mở rộng', a: 'PM' }, { k: 'pm22', n: 'Phú Mỹ 2.2', a: 'PM' },
+  { k: 'pm3', n: 'Phú Mỹ 3', a: 'PM' }, { k: 'pm4', n: 'Phú Mỹ 4', a: 'PM' }, { k: 'vt2', n: 'Vĩnh Tân 2', a: 'VT' },
+  { k: 'dmt', n: 'ĐMT Vĩnh Tân 2', a: 'VT', other: true }, { k: 'vt4', n: 'Vĩnh Tân 4 và Vĩnh Tân 4 MR', a: 'VT' }, { k: 'md1', n: 'Mông Dương 1', a: 'MD' }];
+const PFIELDS = [['run', 'Tổ máy vận hành'], ['sb', 'Tổ máy dự phòng'], ['rep', 'Tổ máy sửa chữa'], ['fault', 'Thiết bị, vị trí sự cố'], ['st', 'Trạm điện'], ['sec', 'Bảo vệ an ninh'], ['at', 'ATVSLĐ/ ATGT/ TNGT'], ['pc', 'PCCN']];
+const plantDef = k => ({ run: k === 'dmt' ? 'Bình thường' : '-', sb: '-', rep: '-', fault: 'Không', st: 'Bình thường', sec: 'Tốt', at: 'Bình thường', pc: 'Bình thường' });
+const repOf = (u, date) => ((u && u.rep) || {})[date] || {};
+/* Giá trị một nhà máy trong ngày: lấy bản sửa sau cùng của các PX cùng khu vực; chưa nhập thì lấy ngày trước đó */
+function plantVal(units, H, date, k) {
+  const pl = PLANTS.find(p => p.k === k); const ids = PX.filter(p => p.area === pl.a).map(p => p.id);
+  const days = H.days.map(d => d.date).filter(d => d <= date).reverse();
+  for (const d of days) { let best = null, by = null; ids.forEach(id => { const e = (repOf(units[id], d).plants || {})[k]; if (e && (!best || (e.ts || 0) > (best.ts || 0))) { best = e; by = id; } }); if (best) return { v: Object.assign(plantDef(k), best), from: d, by }; }
+  return { v: plantDef(k), from: null, by: null };
+}
+const nextIso = s => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+function repCfg(units, H) { const c = ((units.lead || {}).repCfg) || {}; return { ref: c.ref || '', reporter: c.reporter || '', place: c.place || 'Phú Mỹ', title: c.title || H.name || '' }; }
+/* Nhóm công tác theo mẫu nội bộ */
+function repSections(units) {
+  const S = []; const w = id => (u => u ? u.groups : PXI[id].groups)(units[id]);
+  S.push({ h: 'PXSC Cơ - Nhiệt Phú Mỹ', src: [['cc-pm', null]] }, { h: 'PXSC Điện - Tự động Phú Mỹ', src: [['cd-pm', null]] });
+  [0, 1].forEach(g => S.push({ h: `02 PXSC VT tại NMNĐ ${g ? 'VT4' : 'VT2'}`, src: [['cc-vt', g], ['cd-vt', g]] }));
+  S.push({ h: 'PXSC Cơ - Nhiệt Mông Dương', src: [['cc-md', null]] }, { h: 'PXSC Điện - Tự động Mông Dương', src: [['cd-md', null]] }, { h: 'PX Gia công - Phục hồi', src: [['gc-ph', null]] });
+  return S;
+}
+
+const DW = (() => {
+  const x = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  const run = (t, o = {}) => { const pr = `${o.b ? '<w:b/>' : ''}${o.i ? '<w:i/>' : ''}${o.u ? '<w:u w:val="single"/>' : ''}${o.sz ? `<w:sz w:val="${o.sz * 2}"/><w:szCs w:val="${o.sz * 2}"/>` : ''}`;
+    return String(t == null ? '' : t).split('\n').map((l, i) => `<w:r>${pr ? `<w:rPr>${pr}</w:rPr>` : ''}${i ? '<w:br/>' : ''}<w:t xml:space="preserve">${x(l)}</w:t></w:r>`).join(''); };
+  const runs = (c, o) => Array.isArray(c) ? c.map(r => typeof r === 'string' ? run(r, o) : run(r.t, Object.assign({}, o, r))).join('') : run(c, o);
+  const P = (c, o = {}) => `<w:p><w:pPr>${o.keep ? '<w:keepNext/>' : ''}<w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 60 : o.after}" w:line="${o.line || 264}" w:lineRule="auto"/>${o.ind ? `<w:ind w:left="${o.ind}"/>` : ''}${o.first ? `<w:ind w:firstLine="${o.first}"/>` : ''}<w:jc w:val="${o.al || 'both'}"/></w:pPr>${runs(c, o)}</w:p>`;
+  const B = '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>';
+  /* rows: [[cell, ...]], cell = chuỗi hoặc { t, b, i, al, span, fill, sz } ; o.head = số dòng tiêu đề lặp lại */
+  function T(rows, widths, o = {}) {
+    const tot = widths.reduce((a, b) => a + b, 0);
+    const tr = (r, ri) => { let ci = 0; return `<w:tr>${ri < (o.head || 0) ? '<w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>' : '<w:trPr><w:cantSplit/></w:trPr>'}${r.map(c0 => { const c = typeof c0 === 'object' && c0 !== null && !Array.isArray(c0) ? c0 : { t: c0 }; const sp = c.span || 1;
+      const w = widths.slice(ci, ci + sp).reduce((a, b) => a + b, 0); ci += sp;
+      const paras = (Array.isArray(c.t) ? [c.t] : String(c.t == null ? '' : c.t).split('\n\n')).map(t => P(t, { al: c.al || o.al || 'left', b: c.b, i: c.i, sz: c.sz || o.sz, after: 0, line: 240 })).join('');
+      return `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${sp > 1 ? `<w:gridSpan w:val="${sp}"/>` : ''}${c.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${c.fill}"/>` : ''}<w:vAlign w:val="${c.va || 'center'}"/></w:tcPr>${paras}</w:tc>`; }).join('')}</w:tr>`; };
+    return `<w:tbl><w:tblPr><w:tblW w:w="${tot}" w:type="dxa"/>${o.center ? '<w:jc w:val="center"/>' : ''}<w:tblBorders>${o.noBorder ? '' : B}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="30" w:type="dxa"/><w:left w:w="70" w:type="dxa"/><w:bottom w:w="30" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${rows.map(tr).join('')}</w:tbl>`;
+  }
+  function doc(body, o = {}) {
+    const W = o.landscape ? 16838 : 11906, Hh = o.landscape ? 11906 : 16838; const m = Object.assign({ t: 1000, b: 1000, l: 1418, r: 1134 }, o.m || {});
+    const files = [
+      { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>' },
+      { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
+      { name: 'word/_rels/document.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+      { name: 'word/styles.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="26"/><w:szCs w:val="26"/><w:lang w:val="vi-VN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>' },
+      { name: 'word/document.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="${W}" w:h="${Hh}"${o.landscape ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${m.t}" w:right="${m.r}" w:bottom="${m.b}" w:left="${m.l}" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>` }];
+    return XW.zip(files);
+  }
+  return { P, T, doc, run };
+})();
+
+function buildRepDoc(kind, H, units, date, ctx) {
+  const cfg = repCfg(units, H); const P = DW.P, T = DW.T; const nd = nextIso(date); const [y, m, d] = nd.split('-');
+  const day = H.days.find(x => x.date === date) || {}; const from = day.ca1 === false ? '19h00' : '07h00';
+  const USE = 14287; const pw = pc => { const s = pc.reduce((a, b) => a + b, 0); const w = pc.map(p => Math.round(p / s * USE)); w[w.length - 1] += USE - w.reduce((a, b) => a + b, 0); return w; };
+  const hdr = (l, r) => T([[{ t: l, al: 'center' }, { t: r, al: 'center' }]], pw([42, 58]), { noBorder: true });
+  const plantTable = list => T([[...['Stt', 'Nhà máy', ...PFIELDS.map(f => kind === 'tct' && f[0] === 'fault' ? 'Thiết bị sự cố' : f[1])].map(t => ({ t, b: true, al: 'center', fill: 'F2F2F2' }))],
+    ...list.map((p, i) => { const v = plantVal(units, H, date, p.k).v; return [{ t: String(i + 1), al: 'center' }, { t: p.n, b: true }, ...PFIELDS.map(f => ({ t: v[f[0]] || '-', al: 'center' }))]; })], pw([4, 13, 12, 11, 11, 10, 10, 8, 11, 10]), { head: 1, sz: 12 });
+  const ids = PX.map(p => p.id);
+  const incs = ids.map(id => [PXI[id].name, (repOf(units[id], date).inc || '').trim()]).filter(x => x[1]);
+  const atvs = ids.map(id => [PXI[id].name, (repOf(units[id], date).atv || '').trim()]).filter(x => x[1]);
+  const lines = arr => arr.length ? arr.map(([n, t]) => P([{ t: `- ${n}: `, b: true }, t], { ind: 567 })).join('') : P('- Không có.', { ind: 567 });
+  const dateLine = `${cfg.place}, ngày ${d} tháng ${m} năm ${y}`;
+  let b = '';
+  if (kind === 'tct') {
+    b += hdr([{ t: 'TỔNG CÔNG TY PHÁT ĐIỆN 3\n', sz: 12 }, { t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', b: true, sz: 12 }, { t: '\nSố: ………/BC-EPS', sz: 13 }],
+      [{ t: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n', b: true, sz: 12 }, { t: 'Độc lập - Tự do - Hạnh phúc\n\n', b: true, sz: 13 }, { t: dateLine, i: true }]);
+    b += P('BÁO CÁO', { al: 'center', b: true, sz: 14, before: 240, after: 0 }) + P('Về việc tình hình vận hành, bảo vệ an ninh, AT-VSLĐ, PCCN', { al: 'center', b: true, after: 0 }) + P(`trong thời gian nghỉ ${cfg.title}`, { al: 'center', b: true, after: 240 });
+    b += P(`Thực hiện theo văn bản số ${cfg.ref || '……………'} về việc đảm bảo cung cấp điện trong thời gian nghỉ ${cfg.title}, Công ty Dịch vụ Sửa chữa các Nhà máy điện EVNGENCO3 (Công ty EPS) kính báo cáo Tổng Công ty Phát điện 3 tình hình thực hiện công tác vận hành, sự cố, bảo vệ an ninh, an toàn lao động, phòng chống cháy nổ trong thời gian nghỉ ${cfg.title} tại Công ty EPS ngày ${dmy(date)} như sau:`, { first: 567, after: 120 });
+    const det = P('2. Chi tiết bất thường, sự cố: (chỉ nêu khi có bất thường, sự cố thiết bị, mất an ninh hay xảy ra vi phạm AT-VSLĐ, ATGT, TNGT, PCCN)', { i: true, ind: 284, before: 120 });
+    b += P('I. Các đơn vị nhiệt điện', { b: true, keep: true }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => !p.other)) + det + lines(incs.concat(atvs));
+    b += P('II. Các nhà máy điện khác', { b: true, keep: true, before: 120 }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => p.other)) + det + P('- Không có.', { ind: 567 });
+    b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban AT, KT-SX/EVNGENCO3;\n- Ban GĐ/EPS;\n- Các PXSC;\n- Lưu: KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'PHÒNG KỸ THUẬT – AN TOÀN/EPS', b: true }, ...(cfg.reporter ? [{ t: '\n\n\n\n\n' + cfg.reporter, b: true }] : [])], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
+    return DW.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
+  }
+  b += hdr([{ t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', sz: 12 }, { t: 'CÁC ĐƠN VỊ', b: true, sz: 12 }],
+    [{ t: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n', b: true, sz: 12 }, { t: 'Độc lập - Tự do - Hạnh phúc\n\n', b: true, sz: 13 }, { t: dateLine, i: true }]);
+  b += P('BÁO CÁO', { al: 'center', b: true, sz: 14, before: 240, after: 0 }) + P('Về tình hình bảo vệ an toàn, AT-VSLĐ, PCCN, sửa chữa và vận hành', { al: 'center', b: true, after: 0 }) + P(`dịp nghỉ ${cfg.title}`, { al: 'center', b: true, after: 0 }) + P(`(Từ ${from} ngày ${dmy(date)} đến 07h00 ngày ${dmy(nd)})`, { al: 'center', i: true, after: 240 });
+  b += P('1. Tình hình chung:', { b: true, keep: true }) + plantTable(PLANTS);
+  b += P('2. Chi tiết bất thường, sự cố: (chỉ nêu khi có bất thường, sự cố thiết bị)', { b: true, before: 120 }) + lines(incs);
+  b += P('3. Chi tiết AT-VSLĐ, PCCN, ATGT-TNGT (chỉ nêu khi xảy ra vi phạm AT-VSLĐ, ATGT, TNGT PCCN)', { b: true, before: 120 });
+  const ok = atvs.length ? 'Xem ghi nhận bên dưới' : 'Đảm bảo';
+  b += P('a. Tình hình AT-VSLĐ', { b: true, i: true, ind: 284 }) + P(`- Thiết bị: ${ok}`, { ind: 567 }) + P(`- Con người: ${ok}`, { ind: 567 }) + P(`- Biện pháp đã xử lý, giải quyết (nếu có): ${atvs.length ? '' : 'Không'}`, { ind: 567 }) + (atvs.length ? lines(atvs) : '');
+  b += P('b. Tình hình PCCN', { b: true, i: true, ind: 284 }) + P('- Thiết bị: Đảm bảo', { ind: 567 }) + P('- Con người: Đảm bảo', { ind: 567 }) + P('- Biện pháp đã xử lý, giải quyết (nếu có): Không', { ind: 567 });
+  b += P('c. Tình hình ATGT-TNGT', { b: true, i: true, ind: 284 }) + P('- Số vụ tai nạn giao thông xảy ra (nếu có): Không có', { ind: 567 });
+  b += P('4. Các công tác trong ca trực:', { b: true, before: 120, keep: true });
+  const rows = [['Stt', 'Nội dung công tác', 'Vị trí', 'Đang thực hiện', 'Hoàn thành', 'Ghi chú'].map(t => ({ t, b: true, al: 'center', fill: 'F2F2F2' }))];
+  repSections(units).forEach(sec => {
+    const items = []; sec.src.forEach(([id, g]) => (repOf(units[id], date).works || []).forEach(w => { if (!w.t) return; if (g != null && (w.g || 0) !== g) return; items.push(w); }));
+    rows.push([{ t: sec.h, b: true, span: 6, fill: 'FAFAFA' }]);
+    if (!items.length) rows.push([{ t: '', al: 'center' }, { t: 'Không có công tác phát sinh', i: true }, '', '', '', '']);
+    items.forEach((w, i) => rows.push([{ t: String(i + 1), al: 'center' }, w.t, { t: w.loc || '', al: 'center' }, { t: w.st === 'run' ? 'X' : '', al: 'center' }, { t: w.st === 'run' ? '' : 'X', al: 'center' }, w.note || '']));
+  });
+  b += T(rows, pw([5, 46, 13, 9, 9, 18]), { head: 1, sz: 12 });
+  b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }, { t: '\n\n\n\n\n' + (cfg.reporter || ''), b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
+  return DW.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
+}
+
+if (typeof module !== 'undefined') module.exports = { PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
 
 </script>
 <script>
@@ -919,26 +1027,28 @@ function renderTop() {
   E('who').innerHTML = S.me ? `<span>${S.me.role === 'px' ? 'Phân xưởng' : S.me.role === 'lead' ? 'Đơn vị' : S.me.role === 'viewer' ? 'Chỉ xem' : 'Quản trị'}: <b>${esc(S.me.role === 'px' ? PXI[S.me.px].short : S.me.role === 'lead' ? 'Phòng KT-AT' : (S.me.name || 'Chủ sở hữu'))}</b></span>${S.me.role !== 'owner' || typeof IS_WEB !== 'undefined' ? '<button class="btn sm" data-act="logout">Đăng xuất</button>' : ''}` : '';
   E('sub').textContent = S.me && S.me.role === 'px' ? PXI[S.me.px].name : isLeadRole() ? 'Phòng Kỹ thuật - An toàn: lịch trực Lãnh đạo và cán bộ các Phòng' : 'Các phân xưởng sửa chữa nhập lịch trực và giờ làm thêm';
   let tabs = [];
-  if (S.me && isAdmin()) tabs = [['overview', 'Tổng hợp & xuất file'], ['dash', 'Bảng theo dõi'], ['lead', 'Lãnh đạo trực'], ['px', 'Lịch phân xưởng'], ['otall', 'Giờ làm thêm'], ['prjall', 'Công trình'], ['legal', 'Văn bản pháp lý'], ['docs', 'Nội dung in & sơ đồ'], ['holiday', 'Dịp lễ'], ...(S.me.role === 'owner' ? [['accounts', 'Tài khoản'], ['data', 'Dữ liệu']] : [])];
-  else if (isLeadRole()) tabs = [['lead', 'Lịch Lãnh đạo & các Phòng'], ['legal', 'Văn bản pháp lý'], ['leaddir', 'Danh bạ SĐT']];
-  else if (isViewer()) tabs = [['dash', 'Bảng theo dõi'], ['otall', 'Giờ làm thêm'], ['prjall', 'Công trình'], ['legal', 'Văn bản pháp lý']];
+  if (S.me && isAdmin()) tabs = [['overview', 'Tổng hợp & xuất file'], ['dash', 'Bảng theo dõi'], ['lead', 'Lãnh đạo trực'], ['px', 'Lịch phân xưởng'], ['otall', 'Giờ làm thêm'], ['prjall', 'Công trình'], ['repall', 'Báo cáo trực lễ'], ['legal', 'Văn bản pháp lý'], ['docs', 'Nội dung in & sơ đồ'], ['holiday', 'Dịp lễ'], ...(S.me.role === 'owner' ? [['accounts', 'Tài khoản'], ['data', 'Dữ liệu']] : [])];
+  else if (isLeadRole()) tabs = [['lead', 'Lịch Lãnh đạo & các Phòng'], ['repall', 'Báo cáo trực lễ'], ['legal', 'Văn bản pháp lý'], ['leaddir', 'Danh bạ SĐT']];
+  else if (isViewer()) tabs = [['dash', 'Bảng theo dõi'], ['otall', 'Giờ làm thêm'], ['prjall', 'Công trình'], ['repall', 'Báo cáo trực lễ'], ['legal', 'Văn bản pháp lý']];
   else if (S.me) tabs = pxTabs(S.me.px);
   if (S.me && !S.tab) S.tab = defaultTab();
   E('tabs').innerHTML = tabs.map(([k, t]) => `<button data-act="tab" data-v="${k}" aria-current="${S.tab === k}">${t}</button>`).join('');
   paintSave();
 }
-function pxTabs(px) { return [['roster', 'Lịch ca trực'], ['tc', 'Tăng cường & huy động'], ...(px === 'gc-ph' ? [['congxa', 'Công xa']] : []), ['ot', 'Giờ làm thêm'], ['prj', 'Công trình'], ['legal', 'Văn bản pháp lý'], ['dir', 'Danh bạ SĐT']]; }
+function pxTabs(px) { return [['roster', 'Lịch ca trực'], ['tc', 'Tăng cường & huy động'], ...(px === 'gc-ph' ? [['congxa', 'Công xa']] : []), ['ot', 'Giờ làm thêm'], ['rep', 'Báo cáo ngày'], ['prj', 'Công trình'], ['legal', 'Văn bản pháp lý'], ['dir', 'Danh bạ SĐT']]; }
 function viewTab() {
   if (isAdmin()) {
     switch (S.tab) {
       case 'dash': return viewDash();
       case 'prjall': return viewPrjAll();
+      case 'repall': return viewRepAll();
       case 'legal': return viewLegal();
       case 'lead': return viewLead(); case 'px': return viewPxAdmin(); case 'otall': return viewOtAll(); case 'docs': return viewDocs();
       case 'holiday': return viewHoliday(); case 'accounts': return S.me.role === 'owner' ? viewAccounts() : viewOverview(); case 'data': return S.me.role === 'owner' ? viewData() : viewOverview(); default: return viewOverview();
     }
   }
   if (S.tab === 'legal') return viewLegal();
+  if (S.tab === 'repall' && (isLeadRole() || isViewer())) return viewRepAll();
   if (isLeadRole()) return S.tab === 'leaddir' ? viewLeadDir() : viewLead();
   if (isViewer()) return S.tab === 'otall' ? viewOtAll() : S.tab === 'prjall' ? viewPrjAll() : viewDash();
   return viewPx(S.me.px, S.tab);
@@ -975,6 +1085,7 @@ function viewLogin() {
 function statusPill(st) { return `<span class="pill ${st}">${({ draft: 'Đang nhập', submitted: 'Đã gửi, chờ duyệt', approved: 'Đã duyệt', returned: 'Bị trả lại' })[st] || st}</span>`; }
 function viewPx(px, tab) {
   if (tab === 'prj') return viewProjects(px);
+  if (tab === 'rep') return viewRep(px);
   const h = H(), u = U(px), ck = checkUnit(u, h, ctx()); const ed = editableUnit(px);
   const head = `<section class="card stack">
     <div class="row between"><div class="grow"><h2>${esc(PXI[px].name)} · ${esc(h.name)}</h2>
@@ -1533,6 +1644,15 @@ function outForm(e, gc, u) {
 function mutUnit(px, fn) { const u = px === 'lead' ? LU() : clone(U(px)); fn(u); saveUnit(px, u); }
 function mutHol(fn) { const h = clone(H()); fn(h); saveHoliday(h); }
 const ACT = {
+  repDate: el => { S.repDate = el.dataset.v; render(); },
+  repAdd: el => { mutRep(el.dataset.px, curRepDate(), r => { r.works = r.works || []; r.works.push({ t: '', loc: '', st: 'done', note: '' }); }); setTimeout(() => { const l = document.querySelectorAll('textarea[id^=rw_]'); if (l.length) l[l.length - 1].focus(); }, 30); },
+  repDel: el => mutRep(el.dataset.px, curRepDate(), r => { (r.works || []).splice(+el.dataset.i, 1); }),
+  repCopy: el => { const h = H(), date = curRepDate(), di = h.days.findIndex(d => d.date === date); const prev = repOf(U(el.dataset.px), h.days[di - 1].date).works || []; const run = prev.filter(w => w.t && w.st === 'run');
+    if (!run.length) { toast('Ngày trước không có việc đang thực hiện.'); return; }
+    mutRep(el.dataset.px, date, r => { r.works = r.works || []; const have = new Set(r.works.map(w => w.t)); run.forEach(w => { if (!have.has(w.t)) r.works.push(clone(w)); }); }); toast(`Đã chép ${run.length} việc đang thực hiện.`); },
+  repPaste: el => { const t = E('rpaste'); const list = parsePaste(t && t.value); if (!list.length) { toast('Chưa có dòng nào để thêm.'); return; }
+    mutRep(el.dataset.px, curRepDate(), r => { r.works = (r.works || []).filter(w => w.t).concat(list); }); toast(`Đã thêm ${list.length} công tác.`); },
+  repExport: el => repExport(el.dataset.k),
   impDo: () => { const P = S.panel; const R = P.res; let n = 0;
     mutPrj(P.px, P.id, p => { p.members = p.members || []; const have = new Set(p.members.map(m => m.sid).filter(Boolean)); const haveN = new Set(p.members.filter(m => !m.sid).map(m => normName(m.name)));
       R.found.forEach(x => { if (x.on && x.sel && !have.has(x.sel)) { p.members.push({ sid: x.sel, k: 'eps' }); have.add(x.sel); n++; } });
@@ -1631,6 +1751,10 @@ const ACT = {
 };
 const setPath = (o, path, v) => { const ks = path.split('.'); let x = o; ks.slice(0, -1).forEach(k => { x[k] = x[k] ?? (isNaN(+k) ? {} : []); x = x[k]; }); x[ks[ks.length - 1]] = v; };
 const CH = {
+  repPlant: el => { const px = el.dataset.px, k = el.dataset.k, date = curRepDate(); const cur = plantVal(allUnits(), H(), date, k).v; mutRep(px, date, r => { r.plants = r.plants || {}; const e = Object.assign({}, cur, r.plants[k] || {}); delete e.ts; e[el.dataset.f] = el.value.trim() || '-'; e.ts = Date.now(); r.plants[k] = e; }); },
+  repTxt: el => mutRep(el.dataset.px, curRepDate(), r => { r[el.dataset.f] = el.value.trim(); }),
+  repWork: el => mutRep(el.dataset.px, curRepDate(), r => { const w = (r.works || [])[+el.dataset.i]; if (!w) return; const f = el.dataset.f; w[f] = f === 'g' ? +el.value : el.value.trim(); }),
+  repCfg: el => mutUnit('lead', u => { u.repCfg = Object.assign({}, u.repCfg || {}, { [el.dataset.f]: el.value.trim() }); }),
   prjXl: async el => { const f = el.files && el.files[0]; const px = el.dataset.px, id = el.dataset.id; el.value = ''; if (!f) return;
     if (typeof XLSX === 'undefined') { toast('Chức năng này chỉ có trên bản web.'); return; }
     try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); let rows = []; wb.SheetNames.forEach(n => { rows = rows.concat(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '' })); });
@@ -1710,6 +1834,70 @@ const DEFAULT_NOTES = ['- Lãnh đạo Công ty, Các đơn vị Trưởng, đơ
 const DEFAULT_REC = ['- Tổng Công ty phát điện 3 (để báo cáo);', '- Công ty Nhiệt điện Phú Mỹ (để phối hợp);', '- Công ty Nhiệt điện Mông Dương (để phối hợp);', '- Công ty Nhiệt điện Vĩnh Tân (để phối hợp);', '- Nhà máy Nhiệt điện Vĩnh Tân 4 (để phối hợp)', '- Trung tâm Dịch vụ Vận hành EVNGENCO3', '- Ban Lãnh đạo Công ty EPS;', '- Các Phòng/ Phân xưởng Công ty EPS;', '- Lưu: VT, KT-AT.'];
 
 /* ===== Xuất file ===== */
+/* ===== Báo cáo trực lễ hằng ngày ===== */
+function allUnits() { const o = Object.fromEntries(PX.map(p => [p.id, U(p.id)])); o.lead = LU(); return o; }
+function curRepDate() { const ds = H().days.map(d => d.date); if (S.repDate && ds.includes(S.repDate)) return S.repDate; const t = todayIso(); return ds.includes(t) ? t : t > ds[ds.length - 1] ? ds[ds.length - 1] : ds[0]; }
+function repDateBar() { const cur = curRepDate(); return `<div class="seg" role="group" aria-label="Ngày báo cáo">${H().days.map(d => `<button data-act="repDate" data-v="${d.date}" aria-pressed="${d.date === cur}">${wdShort(d.date)} ${dm(d.date)}</button>`).join('')}</div>`; }
+function repSpan(date) { const day = H().days.find(d => d.date === date) || {}; return `Từ ${day.ca1 === false ? '19h00' : '07h00'} ngày ${dmy(date)} đến 07h00 ngày ${dmy(nextIso(date))}`; }
+function canEditRep(px) { return isAdmin() || myPx() === px; }
+function mutRep(px, date, fn) { mutUnit(px, u => { u.rep = u.rep || {}; const r = u.rep[date] = u.rep[date] || {}; fn(r, u); }); }
+function viewRep(px) {
+  const h = H(), date = curRepDate(), u = U(px), r = repOf(u, date), ed = canEditRep(px), dis = ed ? '' : 'disabled', units = allUnits();
+  const plants = PLANTS.filter(p => p.a === PXI[px].area); const works = r.works || []; const di = h.days.findIndex(d => d.date === date);
+  const mates = PX.filter(p => p.area === PXI[px].area && p.id !== px).map(p => p.short);
+  let html = `<section class="card stack"><div class="row between"><div><h2>Báo cáo trực lễ · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}. Nhập trong ngày; Phòng KT-AT tổng hợp và xuất báo cáo gửi TCT và báo cáo nội bộ.</p></div>${repDateBar()}</div></section>`;
+  if (plants.length) html += `<section class="card stack"><h2>1. Tình hình nhà máy</h2><p class="hint">Ô chưa sửa lấy theo ngày trước (hoặc mặc định "Bình thường"). ${mates.length ? `${esc(mates.join(', '))} cùng cập nhật bảng này; ứng dụng lấy nội dung sửa sau cùng.` : ''}</p>
+    <div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${plants.map(p => { const pv = plantVal(units, h, date, p.k);
+      const src = pv.from && pv.from !== date ? `theo ngày ${dm(pv.from)}` : pv.by && pv.by !== px ? `${PXI[pv.by].short} cập nhật` : pv.from ? '' : 'mặc định';
+      return `<tr><td><b>${esc(p.n)}</b>${src ? `<br><small class="hint">${esc(src)}</small>` : ''}</td>${PFIELDS.map(f => `<td><textarea id="pl_${p.k}_${f[0]}" rows="1" data-ch="repPlant" data-px="${px}" data-k="${p.k}" data-f="${f[0]}" ${dis} aria-label="${esc(p.n)} - ${f[1]}">${esc(pv.v[f[0]] || '')}</textarea></td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>`;
+  html += `<section class="card stack"><h2>${plants.length ? 2 : 1}. Bất thường, sự cố và AT-VSLĐ</h2><p class="hint">Để trống nếu không có; báo cáo sẽ ghi "Không có".</p>
+    <label class="field"><span>Chi tiết bất thường, sự cố thiết bị (nếu có)</span><textarea id="rinc" rows="2" data-ch="repTxt" data-px="${px}" data-f="inc" ${dis}>${esc(r.inc || '')}</textarea></label>
+    <label class="field"><span>Vi phạm AT-VSLĐ, PCCN, ATGT, TNGT (nếu có)</span><textarea id="ratv" rows="2" data-ch="repTxt" data-px="${px}" data-f="atv" ${dis}>${esc(r.atv || '')}</textarea></label></section>`;
+  const gsel = (w, i) => px === 'cc-vt' || px === 'cd-vt' ? `<select id="rg_${i}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="g" ${dis} aria-label="Nhà máy">${['NMNĐ VT2', 'NMNĐ VT4'].map((t, g) => `<option value="${g}" ${(w.g || 0) === g ? 'selected' : ''}>${t}</option>`).join('')}</select>` : '';
+  html += `<section class="card stack"><div class="row between"><h2>${plants.length ? 3 : 2}. Các công tác trong ca trực (${works.filter(w => w.t).length})</h2>
+      ${ed && di > 0 ? `<button class="btn sm" data-act="repCopy" data-px="${px}">Chép việc đang thực hiện từ ngày ${dm(h.days[di - 1].date)}</button>` : ''}</div>
+    ${works.length ? `<div class="tbl scroll"><table class="list repw"><thead><tr><th>#</th><th>Nội dung công tác</th><th>Vị trí</th>${gsel({}, -1) ? '<th>Nhà máy</th>' : ''}<th>Kết quả</th><th>Ghi chú</th><th></th></tr></thead><tbody>${works.map((w, i) => `<tr>
+      <td>${i + 1}</td><td><textarea id="rw_${i}" rows="1" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="t" ${dis} aria-label="Nội dung công tác ${i + 1}">${esc(w.t || '')}</textarea></td>
+      <td><input id="rl_${i}" type="text" value="${esc(w.loc || '')}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="loc" ${dis} aria-label="Vị trí" style="width:110px"></td>
+      ${gsel(w, i) ? `<td>${gsel(w, i)}</td>` : ''}
+      <td><select id="rs_${i}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="st" ${dis} aria-label="Kết quả"><option value="done" ${w.st !== 'run' ? 'selected' : ''}>Hoàn thành</option><option value="run" ${w.st === 'run' ? 'selected' : ''}>Đang thực hiện</option></select></td>
+      <td><input id="rn_${i}" type="text" value="${esc(w.note || '')}" data-ch="repWork" data-px="${px}" data-i="${i}" data-f="note" ${dis} aria-label="Ghi chú" placeholder="vd: 40%"></td>
+      <td>${ed ? `<button class="x" data-act="repDel" data-px="${px}" data-i="${i}" aria-label="Xóa">×</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Chưa có công tác nào trong ngày.</p>'}
+    ${ed ? `<div class="row"><button class="add grow" data-act="repAdd" data-px="${px}">+ Thêm công tác</button></div>
+    <details><summary class="hint">Dán nhiều dòng từ Excel/Zalo</summary><div class="stack" style="margin-top:8px"><p class="hint">Mỗi dòng một công tác. Nếu chép từ Excel, các cột theo thứ tự: Nội dung · Vị trí · Kết quả (Hoàn thành/Đang thực hiện hoặc X) · Ghi chú.</p>
+      <textarea id="rpaste" rows="4" placeholder="Vệ sinh lược nước chèn ST43	ST43/PM4	Hoàn thành"></textarea><div class="row"><button class="btn" data-act="repPaste" data-px="${px}">Thêm các dòng đã dán</button></div></div></details>` : ''}</section>`;
+  return html;
+}
+function viewRepAll() {
+  const h = H(), date = curRepDate(), units = allUnits(), cfg = repCfg(units, h); const ed = isAdmin() || isLeadRole(); const dis = ed ? '' : 'disabled';
+  const rows = PX.map(p => { const r = repOf(units[p.id], date); const n = (r.works || []).filter(w => w.t).length; const pl = PX.filter(q => q.area === p.area).some(q => PLANTS.filter(x => x.a === p.area).some(x => ((repOf(units[q.id], date).plants || {})[x.k])));
+    return `<tr><td><b>${esc(p.short)}</b></td><td class="num">${n || '–'}</td><td>${PLANTS.some(x => x.a === p.area) ? (pl ? 'Đã cập nhật' : '<span class="hint">Theo ngày trước</span>') : '<span class="hint">—</span>'}</td><td>${r.inc ? esc(r.inc) : '<span class="hint">Không</span>'}</td><td>${r.atv ? esc(r.atv) : '<span class="hint">Không</span>'}</td></tr>`; }).join('');
+  return `<section class="card stack"><div class="row between"><div><h2>Báo cáo trực lễ · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}</p></div>${repDateBar()}</div>
+    <div class="row"><button class="btn primary" data-act="repExport" data-k="eps">Xuất báo cáo nội bộ EPS (Word)</button><button class="btn primary" data-act="repExport" data-k="tct">Xuất báo cáo gửi TCT (Word)</button></div></section>
+  <section class="card stack"><h2>Thông tin chung trên báo cáo</h2>
+    <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+      <label class="field grow" style="min-width:260px"><span>Căn cứ văn bản (số, ngày) – bản gửi TCT</span><input id="rc_ref" type="text" value="${esc(cfg.ref)}" placeholder="vd: 2770/GENCO3-KT-AT&MT ngày 17/08/2026" data-ch="repCfg" data-f="ref" ${dis}></label>
+      <label class="field" style="min-width:220px"><span>Tên dịp lễ trên báo cáo</span><input id="rc_title" type="text" value="${esc(cfg.title)}" data-ch="repCfg" data-f="title" ${dis}></label>
+      <label class="field"><span>Người báo cáo</span><input id="rc_rep" type="text" value="${esc(cfg.reporter)}" placeholder="Họ tên" data-ch="repCfg" data-f="reporter" ${dis}></label>
+      <label class="field"><span>Địa danh</span><input id="rc_place" type="text" value="${esc(cfg.place)}" data-ch="repCfg" data-f="place" ${dis} style="width:120px"></label></div></section>
+  <section class="card stack"><h2>Tình hình nhập của các phân xưởng</h2><div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th class="num">Công tác</th><th>Tình hình nhà máy</th><th>Bất thường, sự cố</th><th>AT-VSLĐ, PCCN</th></tr></thead><tbody>${rows}</tbody></table></div></section>
+  <section class="card stack"><h2>Tình hình chung các nhà máy</h2><div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${PLANTS.map(p => { const v = plantVal(units, h, date, p.k).v; return `<tr><td><b>${esc(p.n)}</b></td>${PFIELDS.map(f => `<td>${esc(v[f[0]] || '-')}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>`;
+}
+async function repExport(kind) {
+  const h = H(); if (!h) return; if (!dl) { toast('Chế độ xem này không cho tải file.'); return; }
+  const date = curRepDate();
+  try { const bytes = buildRepDoc(kind, HX(), allUnits(), date, ctx()); const [y, m, d] = date.split('-');
+    await dl.save({ filename: `BC truc le ${kind === 'tct' ? 'Gui TCT' : 'Noi bo EPS'} ngay ${d}.${m}.${y}.docx`, data: new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }) }); toast('Đã lưu file.'); }
+  catch (e) { if (!e || e.code !== 'declined') toast('Không xuất được file: ' + ((e && (e.message || e.code)) || e)); }
+}
+function parsePaste(txt) {
+  return String(txt || '').split(/\r?\n/).map(l => l.split('\t').map(x => x.trim())).filter(c => c.join('').trim()).map(c => {
+    if (c.length > 1 && /^\d+$/.test(c[0])) c = c.slice(1);
+    const st = c.slice(2).join(' ').toLowerCase(); const done = /hoàn thành/.test(st) || (c[3] && /x/i.test(c[3]) && !(c[2] && /x/i.test(c[2])));
+    const run = /đang/.test(st) || (c[2] && /^x$/i.test(c[2]));
+    const note = c.length >= 5 ? c[4] : (c[3] && !/^x$/i.test(c[3]) && !/hoàn thành|đang/i.test(c[3]) ? c[3] : '');
+    return { t: c[0].replace(/^[-•+*]\s*/, ''), loc: c[1] || '', st: run && !done ? 'run' : 'done', note }; });
+}
 async function doExport(kind, px) {
   const h = H(); if (!h && kind !== 'PRJ') return; if (!dl) { toast('Chế độ xem này không cho tải file. Hãy mở ứng dụng trên claude.ai.'); return; }
   const units = Object.fromEntries(PX.map(p => [p.id, U(p.id)]));

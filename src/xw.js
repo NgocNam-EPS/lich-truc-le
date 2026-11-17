@@ -113,6 +113,6 @@ const XW = (() => {
       return zip(files);
     }
   }
-  return { Book };
+  return { Book, zip };
 })();
 if (typeof module !== 'undefined') module.exports = { XW };
