@@ -152,6 +152,9 @@ table.mx td{padding:0;vertical-align:top}
 .paper{background:#fff;color:#000;font-family:'Times New Roman',Times,serif;font-size:13pt;width:100%;max-width:1123px;margin:0 auto;padding:36px 44px;box-shadow:0 1px 6px rgba(0,0,0,.18);box-sizing:border-box}
 .paper p{color:#000}
 @media (max-width:700px){.paper{padding:16px;font-size:11pt}}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.linkbtn b{color:var(--accent,#0f6b4f);text-decoration:underline;text-decoration-color:rgba(15,107,79,.35);text-underline-offset:3px}
+.linkbtn:hover b{text-decoration-color:currentColor}
 .uchips{display:flex;flex-wrap:wrap;gap:4px}
 .uchip{font:600 12px/1 inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--line,#d6dcd9);background:var(--card,#fff);color:var(--muted,#667);cursor:pointer;min-width:40px}
 .uchip:disabled{cursor:default;opacity:.7}
@@ -753,8 +756,8 @@ function viewPrjAll() {
       <select id="pfst" data-ch="prjFilt" data-f="st"><option value="">Mọi trạng thái</option>${Object.entries(PRJ_ST).map(([k, v]) => `<option value="${k}" ${F.st === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
     <div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th>Công trình</th><th>Loại</th><th>Thời gian</th><th>Trạng thái</th><th>Nhân sự</th></tr></thead><tbody>
     ${list.map(p => { const st = PRJ_ST[prjStatus(p, today)]; const ms = ntFirst(p.members || []);
-      return `<tr><td><b>${esc(PXI[p.px] ? PXI[p.px].short : p.px)}</b></td><td><b>${esc(p.name)}</b>${p.site ? `<br><span class="hint">${esc(p.site)}</span>` : ''}${prjOverlapHol(p) ? '<br><span class="pill returned">Trùng dịp lễ</span>' : ''}</td><td>${esc(p.type)}</td><td style="white-space:nowrap">${p.from ? dmy(p.from) : '…'} – ${p.to ? dmy(p.to) : '…'}</td><td><span class="pill ${st[1]}">${st[0]}</span></td>
-        <td><b>${ms.length} người</b><br><span class="hint">${esc(ms.slice(0, 8).map(m => personName(m, c) + (m.nt ? ' (TN)' : '')).join(', '))}${ms.length > 8 ? '…' : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="6" class="hint">Chưa có công trình.</td></tr>'}
+      return `<tr><td><b>${esc(PXI[p.px] ? PXI[p.px].short : p.px)}</b></td><td><button class="linkbtn" data-act="prjView" data-px="${p.px}" data-id="${esc(p.id)}" title="Xem danh sách nhân sự"><b>${esc(p.name)}</b></button>${p.site ? `<br><span class="hint">${esc(p.site)}</span>` : ''}${prjOverlapHol(p) ? '<br><span class="pill returned">Trùng dịp lễ</span>' : ''}</td><td>${esc(p.type)}</td><td style="white-space:nowrap">${p.from ? dmy(p.from) : '…'} – ${p.to ? dmy(p.to) : '…'}</td><td><span class="pill ${st[1]}">${st[0]}</span></td>
+        <td><button class="linkbtn" data-act="prjView" data-px="${p.px}" data-id="${esc(p.id)}"><b>${ms.length} người</b></button><br><span class="hint">${esc(ms.slice(0, 8).map(m => personName(m, c) + (m.nt ? ' (TN)' : '')).join(', '))}${ms.length > 8 ? '…' : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="6" class="hint">Chưa có công trình.</td></tr>'}
     </tbody></table></div></section>`;
 }
 
@@ -893,6 +896,7 @@ function renderOverlay() {
   if (P.type === 'prj') { o.innerHTML = prjDrawer(P); return; }
   if (P.type === 'prjImp') { o.innerHTML = prjImpDrawer(P); return; }
   if (P.type === 'repPrev') { o.innerHTML = repPrevDrawer(P); return; }
+  if (P.type === 'prjView') { o.innerHTML = prjViewDrawer(P); return; }
   if (P.type === 'file') { const f = S.files[P.id] || {}; const isPdf = /pdf/.test(f.type || '');
     o.innerHTML = `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Xem văn bản" style="width:min(900px,100vw)"><div class="row between"><div class="grow"><h2>${esc(f.title || f.name || '')}</h2><p class="hint">${esc(f.name || '')}</p></div><button class="btn sm" data-act="dlFile" data-id="${esc(P.id)}">Tải về</button><button class="btn sm" data-act="close">Đóng</button></div>
       <div class="preview">${P.err ? `<p class="hint">${esc(P.err)}</p>` : !P.url ? '<p class="hint">Đang mở văn bản…</p>' : isPdf ? `<iframe src="${P.url}" title="${esc(f.name)}"></iframe>` : `<img src="${P.url}" alt="${esc(f.title || f.name)}">`}</div>
@@ -960,6 +964,7 @@ const ACT = {
   repPaste: el => { const t = E('rpaste'); const list = parsePaste(t && t.value); if (!list.length) { toast('Chưa có dòng nào để thêm.'); return; }
     mutRep(el.dataset.px, curRepKey(), r => { r.works = (r.works || []).filter(w => w.t).concat(list); }); toast(`Đã thêm ${list.length} công tác.`); },
   repExport: el => repExport(el.dataset.k || S.panel.kind),
+  prjView: el => { S.panel = { type: 'prjView', px: el.dataset.px, id: el.dataset.id }; render(); },
   repPrev: el => { S.panel = { type: 'repPrev', kind: el.dataset.k }; render(); },
   impDo: () => { const P = S.panel; const R = P.res; let n = 0;
     mutPrj(P.px, P.id, p => { p.members = p.members || []; const have = new Set(p.members.map(m => m.sid).filter(Boolean)); const haveN = new Set(p.members.filter(m => !m.sid).map(m => normName(m.name)));
@@ -1240,6 +1245,16 @@ function viewRepAll() {
       <label class="field"><span>Địa danh</span><input id="rc_place" type="text" value="${esc(cfg.place)}" data-ch="repCfg" data-f="place" ${dis} style="width:120px"></label></div></section>
   <section class="card stack"><h2>Tình hình nhập của các phân xưởng</h2><div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th>Công tác (theo ca)</th><th>Tình hình nhà máy</th><th>Bất thường, sự cố</th><th>AT-VSLĐ, PCCN</th></tr></thead><tbody>${rows}</tbody></table></div></section>
   <section class="card stack"><h2>Tình hình chung các nhà máy</h2><div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${PLANTS.map(p => { const v = plantVal(units, h, date, p.k).v; return `<tr><td><b>${esc(p.n)}</b></td>${PFIELDS.map(f => `<td>${esc(v[f[0]] || '-')}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>${viewRepEval(h, units)}`;
+}
+function prjViewDrawer(P) {
+  const p = prjList(P.px).find(x => x.id === P.id); if (!p) return ''; const c = ctx(); const st = PRJ_ST[prjStatus(p, todayIso())]; const ms = ntFirst(p.members || []);
+  const rows = ms.map((m, i) => { const s2 = m.sid && IDX.get(m.sid); const ph = personPhone(m, c);
+    return `<div class="cand" style="cursor:default"><span class="num" style="width:22px;color:var(--muted)">${i + 1}</span><span class="grow"><b>${esc(personName(m, c))}</b>${m.nt ? ' <span class="badge">TN</span>' : ''}${!m.sid ? ' <span class="badge k">Thuê ngoài</span>' : ''}
+      <small>${esc([s2 && s2.id, s2 ? s2.title : [m.trade, m.company].filter(Boolean).join(', '), s2 && s2.dept !== PXI[P.px].dept ? s2.dept : ''].filter(Boolean).join(' · '))}</small></span>${ph ? `<a href="tel:${esc(ph.replace(/[^0-9+]/g, ''))}" style="white-space:nowrap;color:var(--accent,#0f6b4f);font-weight:600;text-decoration:none">${esc(ph)}</a>` : ''}</div>`; }).join('');
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Nhân sự công trình"><div class="row between"><div><h2>${esc(p.name)}</h2><p class="hint">${esc(PXI[P.px] ? PXI[P.px].name : P.px)}${p.site ? ' · ' + esc(p.site) : ''}</p></div><button class="btn sm" data-act="close">Đóng</button></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><span class="pill">${esc(p.type)}</span><span class="pill ${st[1]}">${st[0]}</span>${prjOverlapHol(p) ? '<span class="pill returned">Trùng dịp lễ</span>' : ''}<span class="hint">${p.from ? dmy(p.from) : '…'} – ${p.to ? dmy(p.to) : '…'}</span></div>
+    ${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}<p class="hint"><b style="color:var(--ink)">${ms.length}</b> người${ms.filter(m => !m.sid).length ? `, trong đó ${ms.filter(m => !m.sid).length} người thuê ngoài` : ''}</p>
+    <div class="body">${rows || '<p class="hint">Chưa có nhân sự.</p>'}</div></aside>`;
 }
 function repPrevDrawer(P) {
   const h = H(); if (!h) return ''; const date = curRepDate(); let html = '';
