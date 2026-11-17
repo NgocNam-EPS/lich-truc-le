@@ -136,7 +136,7 @@ function checkUnit(u, H, ctx) {
     }));
     Object.keys(perCa).forEach(sid => prjOn(ctx, sid, day.date).forEach(pj => warn.push(`${(ctx.idx.get(sid) || {}).name || sid} đang tham gia công trình ${pj.type} "${pj.name}" ngày ${dmy(day.date)}`)));
     Object.entries(perCa).forEach(([sid, set]) => { if (set.size > 1) warn.push(`${(ctx.idx.get(sid) || {}).name || sid} trực cả 2 ca ngày ${dmy(day.date)} (24 giờ liên tục)`); });
-    if (p.id !== 'gc-ph' && !u.canbo[day.date]) warn.push(`Chưa chọn cán bộ phân xưởng trực ngày ${dmy(day.date)}`);
+    if (!u.canbo[day.date]) warn.push(`Chưa chọn cán bộ phân xưởng trực ngày ${dmy(day.date)}`);
   });
   const rows = otRows(u, H, ctx);
   const miss = rows.filter(r => r.m == null || r.y == null); if (miss.length) err.push(`${miss.length} người chưa nhập giờ làm thêm lũy kế (tháng và năm)`);
@@ -199,7 +199,7 @@ function buildDK01(H, units, ctx) {
     c0.push({ t: 'I. Lãnh đạo EPS:', b: true }, { t: mode('Văn Phòng EPS'), i: true }); who(L.ld, c0); c0.push({ t: '' });
     c0.push({ t: 'II. Cán bộ Các Phòng EPS:', b: true }, { t: mode('Văn Phòng EPS'), i: true }); who(L.cb, c0); c0.push({ t: '' });
     c0.push({ t: 'III. Cán bộ Các Phân xưởng:', b: true }, { t: mode('Phân Xưởng'), i: true });
-    let n = 0; ['cc-pm', 'cd-pm', 'cc-vt', 'cd-vt', 'cc-md', 'cd-md'].forEach(pid => { const sid = U(pid).canbo[day.date]; if (!sid) return; n++; c0.push({ t: `${n}. ${PXI[pid].name}:`, b: true }); who(sid, c0); c0.push({ t: '' }); });
+    let n = 0; ['cc-pm', 'cd-pm', 'cc-vt', 'cd-vt', 'cc-md', 'cd-md', 'gc-ph'].forEach(pid => { const sid = U(pid).canbo[day.date]; if (!sid) return; n++; c0.push({ t: `${n}. ${PXI[pid].name}:`, b: true }); who(sid, c0); c0.push({ t: '' }); });
     if (!n) c0.push({ t: '-' });
     // Cột 2: GC-PH
     const g = U('gc-ph'); const c1 = cols[1];
@@ -425,7 +425,7 @@ function buildPX(H, units, ctx, px) {
         ws.merge(rc, 2, r - 1, 2, c === 'c1' ? 'Ca ngày\n(Ca 1)' : 'Ca đêm\n(Ca 2)', Object.assign({}, cc, { font: { sz: 12, b: true } }));
         ws.merge(rc, 3, r - 1, 3, c === 'c1' ? '07h00 – 19h00' : '19h00 – 07h00\nhôm sau', cc);
       });
-      if (px !== 'gc-ph') { ws.set(r, 2, '', cs); ws.merge(r, 2, r, 4, day.ca1 ? 'Cán bộ PX trực (ca ngày tại PX, ca đêm điện thoại)' : 'Cán bộ PX trực (điện thoại)', Object.assign({}, cs, { font: { sz: 12, i: true } }));
+      { ws.set(r, 2, '', cs); ws.merge(r, 2, r, 4, day.ca1 ? 'Cán bộ PX trực (ca ngày tại PX, ca đêm điện thoại)' : 'Cán bộ PX trực (điện thoại)', Object.assign({}, cs, { font: { sz: 12, i: true } }));
         ws.set(r, 5, '', cs); ws.set(r, 6, cb ? cb.name : '–', Object.assign({}, cs, { font: { sz: 12, b: true } })); ws.set(r, 7, cb ? cb.title : '', cs); ws.set(r, 8, '', cs); ws.set(r, 9, cb ? (ctx.phones[cb.id] || '') : '', cc); r++; }
       ws.merge(r0, 1, r - 1, 1, `${wdLong(day.date)}\n${dmy(day.date)}`, Object.assign({}, cc, { font: { sz: 12, b: true } }));
     });

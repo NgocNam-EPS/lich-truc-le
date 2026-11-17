@@ -414,10 +414,9 @@ function viewRoster(px, u, h, ed) {
     ${ed ? `<details><summary class="hint">Vị trí trực (${u.groups.filter(Boolean).length || 'một vị trí'})</summary><div class="stack" style="margin-top:8px">${u.groups.map((g, gi) => `<div class="row"><input id="grp${gi}" type="text" value="${esc(g)}" placeholder="(không ghi vị trí)" data-ch="grpName" data-px="${px}" data-i="${gi}">${u.groups.length > 1 ? `<button class="btn sm danger" data-act="grpDel" data-px="${px}" data-i="${gi}">Xóa</button>` : ''}</div>`).join('')}<button class="btn sm" data-act="grpAdd" data-px="${px}">+ Thêm vị trí</button></div></details>` : ''}</section>`;
   h.days.forEach((day, di) => {
     html += `<section class="day">${leaf(day.date)}<div class="daybody">`;
-    if (!isGC) html += `<div class="row"><label class="field grow" style="max-width:420px"><span>Cán bộ phân xưởng trực (${day.ca1 ? 'ca ngày tại PX, ca đêm điện thoại' : 'trực điện thoại'})</span>
+    html += `<div class="row"><label class="field grow" style="max-width:420px"><span>Cán bộ phân xưởng trực (${day.ca1 ? 'ca ngày tại PX, ca đêm điện thoại' : 'trực điện thoại'})</span>
       <select id="cb_${day.date}" data-ch="canbo" data-px="${px}" data-d="${day.date}" ${ed ? '' : 'disabled'}><option value="">Chọn cán bộ…</option>${leads.map(s => `<option value="${esc(s.id)}" ${u.canbo[day.date] === s.id ? 'selected' : ''}>${esc(s.name)} — ${esc(s.title)}</option>`).join('')}</select></label>
       ${di > 0 && ed ? `<button class="btn sm" data-act="copyPrev" data-px="${px}" data-d="${day.date}" data-p="${h.days[di - 1].date}">Chép lịch ngày trước</button>` : ''}</div>`;
-    else if (di > 0 && ed) html += `<div class="row"><button class="btn sm" data-act="copyPrev" data-px="${px}" data-d="${day.date}" data-p="${h.days[di - 1].date}">Chép lịch ngày trước</button></div>`;
     html += `<div class="cas">`;
     caList(day).forEach(c => {
       const n = u.groups.reduce((a, g, gi) => a + (u.roster[rkey(day.date, c, gi)] || []).length, 0);
@@ -620,7 +619,7 @@ function viewDash() {
     return `<div><div class="mini">${String(dt.getUTCDate()).padStart(2, '0')}<small>${wdShort(d.date)}</small></div><div class="stack" style="gap:4px;font-size:13px"><span><span class="hint">Lãnh đạo:</span> <b>${a ? esc(a.name) : '–'}</b>${a && c.phones[a.id] ? ' · ' + esc(c.phones[a.id]) : ''}</span><span><span class="hint">Các Phòng:</span> <b>${b ? esc(b.name) : '–'}</b>${b && c.phones[b.id] ? ' · ' + esc(c.phones[b.id]) : ''}</span></div></div>`; }).join('')}</div></section>`;
 }
 function cellDrawer(P) {
-  const c = ctx(); const ci = cellInfo(P.px, P.d, P.c); const u = U(P.px); const cb = P.px !== 'gc-ph' && u.canbo[P.d] && IDX.get(u.canbo[P.d]);
+  const c = ctx(); const ci = cellInfo(P.px, P.d, P.c); const u = U(P.px); const cb = u.canbo[P.d] && IDX.get(u.canbo[P.d]);
   const line = e => `<div class="cand" style="cursor:default"><span class="grow"><b>${esc(personName(e, c))}</b>${e.nt ? ' <span class="badge nt">NT</span>' : ''}${e.k !== 'eps' ? ` <span class="badge k">${esc(KINDS[e.k])}</span>` : ''}<small>${esc([e.sid && IDX.get(e.sid) ? IDX.get(e.sid).title : (e.company || e.trade || ''), e.g].filter(Boolean).join(' · '))}</small></span><span class="k">${esc(personPhone(e, c) || '')}</span></div>`;
   return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Chi tiết ca trực"><div class="row between"><div><h2>${esc(PXI[P.px].name)}</h2><p class="hint">${caLabel(P.c)} · ${wdLong(P.d)} ${dmy(P.d)} · ${caTime(P.c)}</p></div><button class="btn sm" data-act="close">Đóng</button></div>
     ${cb ? `<p class="hint">Cán bộ phân xưởng trực: <b style="color:var(--ink)">${esc(cb.name)}</b>${c.phones[cb.id] ? ' · ' + esc(c.phones[cb.id]) : ''}</p>` : ''}
@@ -785,7 +784,7 @@ function viewLead() {
     return `<section class="day">${leaf(day.date)}<div class="daybody"><div class="cols">
       <div class="stack"><label class="field"><span>I. Lãnh đạo EPS</span>${sel('ld_' + day.date, lds, L.ld, 'ld', day.date)}</label>${L.ld ? `<label class="field"><span>SĐT</span><input id="ldp_${day.date}" type="tel" value="${esc(ph[L.ld] || '')}" data-ch="phone" data-sid="${esc(L.ld)}" ${dis}></label>` : ''}</div>
       <div class="stack"><label class="field"><span>II. Cán bộ các Phòng EPS</span>${sel('cb_' + day.date, cbs, L.cb, 'cb', day.date)}</label>${L.cb ? `<label class="field"><span>SĐT</span><input id="cbp_${day.date}" type="tel" value="${esc(ph[L.cb] || '')}" data-ch="phone" data-sid="${esc(L.cb)}" ${dis}></label>` : ''}</div>
-      <div class="stack"><span class="hint"><b>III. Cán bộ các Phân xưởng</b></span>${PX.filter(p => p.id !== 'gc-ph').map(p => { const sid = U(p.id).canbo[day.date]; const s = sid && IDX.get(sid); return `<span class="hint">${esc(p.short)}: ${s ? `<b style="color:var(--ink)">${esc(s.name)}</b>` : '<i>chưa chọn</i>'}</span>`; }).join('')}</div>
+      <div class="stack"><span class="hint"><b>III. Cán bộ các Phân xưởng</b></span>${PX.map(p => { const sid = U(p.id).canbo[day.date]; const s = sid && IDX.get(sid); return `<span class="hint">${esc(p.short)}: ${s ? `<b style="color:var(--ink)">${esc(s.name)}</b>` : '<i>chưa chọn</i>'}</span>`; }).join('')}</div>
     </div></div></section>`; }).join('')}`;
 }
 
