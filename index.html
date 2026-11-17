@@ -148,6 +148,11 @@ table.mx td{padding:0;vertical-align:top}
 .cellb{width:100%;min-height:58px;border-radius:8px;border:1px solid var(--line);background:var(--sunk);padding:6px 8px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
 .cellb:hover{border-color:var(--accent)}
 .cellb b{font-size:12.5px;font-weight:600;line-height:1.3}.cellb small{font-size:11.5px;color:var(--muted)}
+.drawer.wide{width:min(1180px,100vw)}
+.prevwrap{background:#e9ecea;padding:14px;border-radius:8px}
+.paper{background:#fff;color:#000;font-family:'Times New Roman',Times,serif;font-size:13pt;width:100%;max-width:1123px;margin:0 auto;padding:36px 44px;box-shadow:0 1px 6px rgba(0,0,0,.18);box-sizing:border-box}
+.paper p{color:#000}
+@media (max-width:700px){.paper{padding:16px;font-size:11pt}}
 .uchips{display:flex;flex-wrap:wrap;gap:4px}
 .uchip{font:600 12px/1 inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--line,#d6dcd9);background:var(--card,#fff);color:var(--muted,#667);cursor:pointer;min-width:40px}
 .uchip:disabled{cursor:default;opacity:.7}
@@ -874,8 +879,24 @@ const DW = (() => {
   return { P, T, doc, run };
 })();
 
-function buildRepDoc(kind, H, units, date, ctx) {
-  const cfg = repCfg(units, H); const P = DW.P, T = DW.T; const nd = nextIso(date); const [y, m, d] = nd.split('-');
+/* Bản HTML cùng giao diện với DW, dùng để xem trước báo cáo trên màn hình */
+const DH = (() => {
+  const x = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const st = o => `${o.b ? 'font-weight:700;' : ''}${o.i ? 'font-style:italic;' : ''}${o.u ? 'text-decoration:underline;' : ''}${o.sz ? `font-size:${o.sz}pt;` : ''}`;
+  const run = (t, o = {}) => `<span style="${st(o)}">${x(t).replace(/\n/g, '<br>')}</span>`;
+  const runs = (c, o) => Array.isArray(c) ? c.map(r => typeof r === 'string' ? run(r, o) : run(r.t, Object.assign({}, o, r))).join('') : run(c, o);
+  const P = (c, o = {}) => `<p style="margin:${(o.before || 0) / 20}pt 0 ${(o.after == null ? 60 : o.after) / 20}pt;text-align:${o.al === 'both' || !o.al ? 'justify' : o.al};${o.ind ? `padding-left:${o.ind / 20}pt;` : ''}${o.first ? `text-indent:${o.first / 20}pt;` : ''}line-height:1.25">${runs(c, o) || '&nbsp;'}</p>`;
+  function T(rows, widths, o = {}) { const tot = widths.reduce((a, b) => a + b, 0); const bd = o.noBorder ? 'none' : '1px solid #000';
+    return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin:2pt 0"><colgroup>${widths.map(w => `<col style="width:${(w / tot * 100).toFixed(2)}%">`).join('')}</colgroup>${rows.map(r => `<tr>${r.map(c0 => { const c = typeof c0 === 'object' && c0 !== null && !Array.isArray(c0) ? c0 : { t: c0 };
+      const paras = (Array.isArray(c.t) ? [c.t] : String(c.t == null ? '' : c.t).split('\n\n')).map(t => P(t, { al: c.al || o.al || 'left', b: c.b, i: c.i, sz: c.sz || o.sz, after: 0 })).join('');
+      return `<td ${c.span > 1 ? `colspan="${c.span}"` : ''} style="border:${bd};padding:1.5pt 3.5pt;vertical-align:${c.va === 'top' ? 'top' : 'middle'};${c.fill ? `background:#${c.fill};` : ''}">${paras}</td>`; }).join('')}</tr>`).join('')}</table>`; }
+  const doc = body => `<div class="paper">${body}</div>`;
+  return { P, T, doc };
+})();
+
+function buildRepDoc(kind, H, units, date, ctx, W) {
+  W = W || DW;
+  const cfg = repCfg(units, H); const P = W.P, T = W.T; const nd = nextIso(date); const [y, m, d] = nd.split('-');
   const day = H.days.find(x => x.date === date) || {}; const from = day.ca1 === false ? '19h00' : '07h00';
   const USE = 14287; const pw = pc => { const s = pc.reduce((a, b) => a + b, 0); const w = pc.map(p => Math.round(p / s * USE)); w[w.length - 1] += USE - w.reduce((a, b) => a + b, 0); return w; };
   const hdr = (l, r) => T([[{ t: l, al: 'center' }, { t: r, al: 'center' }]], pw([42, 58]), { noBorder: true });
@@ -896,7 +917,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
     b += P('I. Các đơn vị nhiệt điện', { b: true, keep: true }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => !p.other)) + det + lines(incs.concat(atvs));
     b += P('II. Các nhà máy điện khác', { b: true, keep: true, before: 120 }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => p.other)) + det + P('- Không có.', { ind: 567 });
     b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban AT, KT-SX/EVNGENCO3;\n- Ban GĐ/EPS;\n- Các PXSC;\n- Lưu: KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'PHÒNG KỸ THUẬT – AN TOÀN/EPS', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
-    return DW.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
+    return W.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
   }
   b += hdr([{ t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', sz: 12 }, { t: 'CÁC ĐƠN VỊ', b: true, sz: 12 }],
     [{ t: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n', b: true, sz: 12 }, { t: 'Độc lập - Tự do - Hạnh phúc\n\n', b: true, sz: 13 }, { t: dateLine, i: true }]);
@@ -918,7 +939,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
   });
   b += T(rows, pw([5, 46, 13, 9, 9, 18]), { head: 1, sz: 12 });
   b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
-  return DW.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
+  return W.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 
 if (typeof module !== 'undefined') module.exports = { unitStates, unitStrings, shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
@@ -1613,6 +1634,7 @@ function renderOverlay() {
   if (P.type === 'cell') { o.innerHTML = cellDrawer(P); return; }
   if (P.type === 'prj') { o.innerHTML = prjDrawer(P); return; }
   if (P.type === 'prjImp') { o.innerHTML = prjImpDrawer(P); return; }
+  if (P.type === 'repPrev') { o.innerHTML = repPrevDrawer(P); return; }
   if (P.type === 'file') { const f = S.files[P.id] || {}; const isPdf = /pdf/.test(f.type || '');
     o.innerHTML = `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Xem văn bản" style="width:min(900px,100vw)"><div class="row between"><div class="grow"><h2>${esc(f.title || f.name || '')}</h2><p class="hint">${esc(f.name || '')}</p></div><button class="btn sm" data-act="dlFile" data-id="${esc(P.id)}">Tải về</button><button class="btn sm" data-act="close">Đóng</button></div>
       <div class="preview">${P.err ? `<p class="hint">${esc(P.err)}</p>` : !P.url ? '<p class="hint">Đang mở văn bản…</p>' : isPdf ? `<iframe src="${P.url}" title="${esc(f.name)}"></iframe>` : `<img src="${P.url}" alt="${esc(f.title || f.name)}">`}</div>
@@ -1679,7 +1701,8 @@ const ACT = {
   repShift: el => { S.repKey = el.dataset.v; render(); },
   repPaste: el => { const t = E('rpaste'); const list = parsePaste(t && t.value); if (!list.length) { toast('Chưa có dòng nào để thêm.'); return; }
     mutRep(el.dataset.px, curRepKey(), r => { r.works = (r.works || []).filter(w => w.t).concat(list); }); toast(`Đã thêm ${list.length} công tác.`); },
-  repExport: el => repExport(el.dataset.k),
+  repExport: el => repExport(el.dataset.k || S.panel.kind),
+  repPrev: el => { S.panel = { type: 'repPrev', kind: el.dataset.k }; render(); },
   impDo: () => { const P = S.panel; const R = P.res; let n = 0;
     mutPrj(P.px, P.id, p => { p.members = p.members || []; const have = new Set(p.members.map(m => m.sid).filter(Boolean)); const haveN = new Set(p.members.filter(m => !m.sid).map(m => normName(m.name)));
       R.found.forEach(x => { if (x.on && x.sel && !have.has(x.sel)) { p.members.push({ sid: x.sel, k: 'eps' }); have.add(x.sel); n++; } });
@@ -1951,7 +1974,7 @@ function viewRepAll() {
   const DK = dayKeys(h, date); const rows = PX.map(p => { const rr = DK.map(k => repOf(units[p.id], k)); const r = { inc: rr.map(x => x.inc).filter(Boolean).join('; '), atv: rr.map(x => x.atv).filter(Boolean).join('; ') }; const n = DK.map(k => `${k.endsWith('c1') ? 'Ngày' : 'Đêm'}: ${(repOf(units[p.id], k).works || []).filter(w => w.t).length}`).join(' · '); const pl = PX.filter(q => q.area === p.area).some(q => PLANTS.filter(x => x.a === p.area).some(x => DK.some(k => (repOf(units[q.id], k).plants || {})[x.k])));
     return `<tr><td><b>${esc(p.short)}</b></td><td>${n}</td><td>${PLANTS.some(x => x.a === p.area) ? (pl ? 'Đã cập nhật' : '<span class="hint">Theo ngày trước</span>') : '<span class="hint">—</span>'}</td><td>${r.inc ? esc(r.inc) : '<span class="hint">Không</span>'}</td><td>${r.atv ? esc(r.atv) : '<span class="hint">Không</span>'}</td></tr>`; }).join('');
   return `<section class="card stack"><div class="row between"><div><h2>Báo cáo trực lễ · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}</p></div>${repDateBar()}</div>
-    <div class="row"><button class="btn primary" data-act="repExport" data-k="eps">Xuất báo cáo nội bộ EPS (Word)</button><button class="btn primary" data-act="repExport" data-k="tct">Xuất báo cáo gửi TCT (Word)</button></div></section>
+    <div class="row"><button class="btn primary" data-act="repPrev" data-k="eps">Xem trước & xuất báo cáo nội bộ EPS</button><button class="btn primary" data-act="repPrev" data-k="tct">Xem trước & xuất báo cáo gửi TCT</button></div></section>
   <section class="card stack"><h2>Thông tin chung trên báo cáo</h2>
     <div class="row" style="align-items:flex-end;flex-wrap:wrap">
       <label class="field grow" style="min-width:260px"><span>Căn cứ văn bản (số, ngày) – bản gửi TCT</span><input id="rc_ref" type="text" value="${esc(cfg.ref)}" placeholder="vd: 2770/GENCO3-KT-AT&MT ngày 17/08/2026" data-ch="repCfg" data-f="ref" ${dis}></label>
@@ -1959,6 +1982,14 @@ function viewRepAll() {
       <label class="field"><span>Địa danh</span><input id="rc_place" type="text" value="${esc(cfg.place)}" data-ch="repCfg" data-f="place" ${dis} style="width:120px"></label></div></section>
   <section class="card stack"><h2>Tình hình nhập của các phân xưởng</h2><div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th>Công tác (theo ca)</th><th>Tình hình nhà máy</th><th>Bất thường, sự cố</th><th>AT-VSLĐ, PCCN</th></tr></thead><tbody>${rows}</tbody></table></div></section>
   <section class="card stack"><h2>Tình hình chung các nhà máy</h2><div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${PLANTS.map(p => { const v = plantVal(units, h, date, p.k).v; return `<tr><td><b>${esc(p.n)}</b></td>${PFIELDS.map(f => `<td>${esc(v[f[0]] || '-')}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>${viewRepEval(h, units)}`;
+}
+function repPrevDrawer(P) {
+  const h = H(); if (!h) return ''; const date = curRepDate(); let html = '';
+  try { html = buildRepDoc(P.kind, HX(), allUnits(), date, ctx(), DH); } catch (e) { html = `<p class="hint">Không tạo được bản xem trước: ${esc(e.message || e)}</p>`; }
+  return `<div class="scrim" data-act="close"></div><aside class="drawer wide" role="dialog" aria-label="Xem trước báo cáo"><div class="row between" style="flex-wrap:wrap;gap:8px"><div><h2>Xem trước báo cáo · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}</p></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><div class="seg" role="group" aria-label="Loại báo cáo"><button data-act="repPrev" data-k="eps" aria-pressed="${P.kind === 'eps'}">Nội bộ EPS</button><button data-act="repPrev" data-k="tct" aria-pressed="${P.kind === 'tct'}">Gửi TCT</button></div>
+    <button class="btn primary" data-act="repExport" data-k="${P.kind}">Tải file Word</button><button class="btn" data-act="close">Đóng</button></div></div>
+    <div class="body prevwrap">${html}</div></aside>`;
 }
 async function repExport(kind) {
   const h = H(); if (!h) return; if (!dl) { toast('Chế độ xem này không cho tải file.'); return; }

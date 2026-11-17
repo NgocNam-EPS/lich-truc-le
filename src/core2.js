@@ -557,8 +557,24 @@ const DW = (() => {
   return { P, T, doc, run };
 })();
 
-function buildRepDoc(kind, H, units, date, ctx) {
-  const cfg = repCfg(units, H); const P = DW.P, T = DW.T; const nd = nextIso(date); const [y, m, d] = nd.split('-');
+/* Bản HTML cùng giao diện với DW, dùng để xem trước báo cáo trên màn hình */
+const DH = (() => {
+  const x = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const st = o => `${o.b ? 'font-weight:700;' : ''}${o.i ? 'font-style:italic;' : ''}${o.u ? 'text-decoration:underline;' : ''}${o.sz ? `font-size:${o.sz}pt;` : ''}`;
+  const run = (t, o = {}) => `<span style="${st(o)}">${x(t).replace(/\n/g, '<br>')}</span>`;
+  const runs = (c, o) => Array.isArray(c) ? c.map(r => typeof r === 'string' ? run(r, o) : run(r.t, Object.assign({}, o, r))).join('') : run(c, o);
+  const P = (c, o = {}) => `<p style="margin:${(o.before || 0) / 20}pt 0 ${(o.after == null ? 60 : o.after) / 20}pt;text-align:${o.al === 'both' || !o.al ? 'justify' : o.al};${o.ind ? `padding-left:${o.ind / 20}pt;` : ''}${o.first ? `text-indent:${o.first / 20}pt;` : ''}line-height:1.25">${runs(c, o) || '&nbsp;'}</p>`;
+  function T(rows, widths, o = {}) { const tot = widths.reduce((a, b) => a + b, 0); const bd = o.noBorder ? 'none' : '1px solid #000';
+    return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin:2pt 0"><colgroup>${widths.map(w => `<col style="width:${(w / tot * 100).toFixed(2)}%">`).join('')}</colgroup>${rows.map(r => `<tr>${r.map(c0 => { const c = typeof c0 === 'object' && c0 !== null && !Array.isArray(c0) ? c0 : { t: c0 };
+      const paras = (Array.isArray(c.t) ? [c.t] : String(c.t == null ? '' : c.t).split('\n\n')).map(t => P(t, { al: c.al || o.al || 'left', b: c.b, i: c.i, sz: c.sz || o.sz, after: 0 })).join('');
+      return `<td ${c.span > 1 ? `colspan="${c.span}"` : ''} style="border:${bd};padding:1.5pt 3.5pt;vertical-align:${c.va === 'top' ? 'top' : 'middle'};${c.fill ? `background:#${c.fill};` : ''}">${paras}</td>`; }).join('')}</tr>`).join('')}</table>`; }
+  const doc = body => `<div class="paper">${body}</div>`;
+  return { P, T, doc };
+})();
+
+function buildRepDoc(kind, H, units, date, ctx, W) {
+  W = W || DW;
+  const cfg = repCfg(units, H); const P = W.P, T = W.T; const nd = nextIso(date); const [y, m, d] = nd.split('-');
   const day = H.days.find(x => x.date === date) || {}; const from = day.ca1 === false ? '19h00' : '07h00';
   const USE = 14287; const pw = pc => { const s = pc.reduce((a, b) => a + b, 0); const w = pc.map(p => Math.round(p / s * USE)); w[w.length - 1] += USE - w.reduce((a, b) => a + b, 0); return w; };
   const hdr = (l, r) => T([[{ t: l, al: 'center' }, { t: r, al: 'center' }]], pw([42, 58]), { noBorder: true });
@@ -579,7 +595,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
     b += P('I. Các đơn vị nhiệt điện', { b: true, keep: true }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => !p.other)) + det + lines(incs.concat(atvs));
     b += P('II. Các nhà máy điện khác', { b: true, keep: true, before: 120 }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => p.other)) + det + P('- Không có.', { ind: 567 });
     b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban AT, KT-SX/EVNGENCO3;\n- Ban GĐ/EPS;\n- Các PXSC;\n- Lưu: KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'PHÒNG KỸ THUẬT – AN TOÀN/EPS', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
-    return DW.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
+    return W.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
   }
   b += hdr([{ t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', sz: 12 }, { t: 'CÁC ĐƠN VỊ', b: true, sz: 12 }],
     [{ t: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n', b: true, sz: 12 }, { t: 'Độc lập - Tự do - Hạnh phúc\n\n', b: true, sz: 13 }, { t: dateLine, i: true }]);
@@ -601,7 +617,7 @@ function buildRepDoc(kind, H, units, date, ctx) {
   });
   b += T(rows, pw([5, 46, 13, 9, 9, 18]), { head: 1, sz: 12 });
   b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
-  return DW.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
+  return W.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 
 if (typeof module !== 'undefined') module.exports = { unitStates, unitStrings, shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
