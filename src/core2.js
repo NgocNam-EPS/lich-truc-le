@@ -572,24 +572,27 @@ const DH = (() => {
   return { P, T, doc };
 })();
 
-function buildRepDoc(kind, H, units, date, ctx, W) {
-  W = W || DW;
+function buildRepDoc(kind, H, units, date, ctx, W, o) {
+  W = W || DW; o = o || {}; const PXO = o.px; const one = PXO && o.keys && o.keys.length === 1;
   const cfg = repCfg(units, H); const P = W.P, T = W.T; const nd = nextIso(date); const [y, m, d] = nd.split('-');
   const day = H.days.find(x => x.date === date) || {}; const from = day.ca1 === false ? '19h00' : '07h00';
   const USE = 14287; const pw = pc => { const s = pc.reduce((a, b) => a + b, 0); const w = pc.map(p => Math.round(p / s * USE)); w[w.length - 1] += USE - w.reduce((a, b) => a + b, 0); return w; };
   const hdr = (l, r) => T([[{ t: l, al: 'center' }, { t: r, al: 'center' }]], pw([42, 58]), { noBorder: true });
   const plantTable = list => T([[...['Stt', 'Nhà máy', ...PFIELDS.map(f => kind === 'tct' && f[0] === 'fault' ? 'Thiết bị sự cố' : f[1])].map(t => ({ t, b: true, al: 'center', fill: 'F2F2F2' }))],
-    ...list.map((p, i) => { const v = plantVal(units, H, date, p.k).v; return [{ t: String(i + 1), al: 'center' }, { t: p.n, b: true }, ...PFIELDS.map(f => ({ t: v[f[0]] || '-', al: 'center' }))]; })], pw([4, 13, 12, 11, 11, 10, 10, 8, 11, 10]), { head: 1, sz: 12 });
-  const ids = PX.map(p => p.id);
-  const DK = dayKeys(H, date); const txt = f => ids.flatMap(id => DK.map(k => [PXI[id].name + (DK.length > 1 ? ` (${k.endsWith('c1') ? 'ca ngày' : 'ca đêm'})` : ''), (repOf(units[id], k)[f] || '').trim()])).filter(x => x[1]);
+    ...list.map((p, i) => { const v = plantVal(units, H, endK, p.k).v; return [{ t: String(i + 1), al: 'center' }, { t: p.n, b: true }, ...PFIELDS.map(f => ({ t: v[f[0]] || '-', al: 'center' }))]; })], pw([4, 13, 12, 11, 11, 10, 10, 8, 11, 10]), { head: 1, sz: 12 });
+  const ids = PXO ? [PXO] : PX.map(p => p.id);
+  const DK = o.keys || dayKeys(H, date); const endK = o.keys ? DK[DK.length - 1] : date; const txt = f => ids.flatMap(id => DK.map(k => [PXI[id].name + (DK.length > 1 ? ` (${k.endsWith('c1') ? 'ca ngày' : 'ca đêm'})` : ''), (repOf(units[id], k)[f] || '').trim()])).filter(x => x[1]);
   const incs = txt('inc'), atvs = txt('atv');
   const lines = arr => arr.length ? arr.map(([n, t]) => P([{ t: `- ${n}: `, b: true }, t], { ind: 567 })).join('') : P('- Không có.', { ind: 567 });
-  const dateLine = `${cfg.place}, ngày ${d} tháng ${m} năm ${y}`;
+  const endDate = one && DK[0].endsWith('c1') ? date : nd; const [y2, m2, d2] = endDate.split('-');
+  const place = PXO ? ({ PM: 'Phú Mỹ', VT: 'Vĩnh Tân', MD: 'Mông Dương' }[PXI[PXO].area] || cfg.place) : cfg.place;
+  const dateLine = `${place}, ngày ${PXO ? d2 : d} tháng ${PXO ? m2 : m} năm ${PXO ? y2 : y}`;
   let b = '';
   if (kind === 'tct') {
     b += hdr([{ t: 'TỔNG CÔNG TY PHÁT ĐIỆN 3\n', sz: 12 }, { t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', b: true, sz: 12 }, { t: '\nSố: ………/BC-EPS', sz: 13 }],
       [{ t: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n', b: true, sz: 12 }, { t: 'Độc lập - Tự do - Hạnh phúc\n\n', b: true, sz: 13 }, { t: dateLine, i: true }]);
-    b += P('BÁO CÁO', { al: 'center', b: true, sz: 14, before: 240, after: 0 }) + P('Về việc tình hình vận hành, bảo vệ an ninh, AT-VSLĐ, PCCN', { al: 'center', b: true, after: 0 }) + P(`trong thời gian nghỉ ${cfg.title}`, { al: 'center', b: true, after: 240 });
+    const span = one ? (DK[0].endsWith('c1') ? `(Ca ngày: từ 07h00 đến 19h00 ngày ${dmy(date)})` : `(Ca đêm: từ 19h00 ngày ${dmy(date)} đến 07h00 ngày ${dmy(nd)})`) : `(Từ ${from} ngày ${dmy(date)} đến 07h00 ngày ${dmy(nd)})`;
+  b += P(one ? 'BÁO CÁO CA TRỰC' : 'BÁO CÁO', { al: 'center', b: true, sz: 14, before: 240, after: 0 }) + P('Về việc tình hình vận hành, bảo vệ an ninh, AT-VSLĐ, PCCN', { al: 'center', b: true, after: 0 }) + P(`trong thời gian nghỉ ${cfg.title}`, { al: 'center', b: true, after: 240 });
     b += P(`Thực hiện theo văn bản số ${cfg.ref || '……………'} về việc đảm bảo cung cấp điện trong thời gian nghỉ ${cfg.title}, Công ty Dịch vụ Sửa chữa các Nhà máy điện EVNGENCO3 (Công ty EPS) kính báo cáo Tổng Công ty Phát điện 3 tình hình thực hiện công tác vận hành, sự cố, bảo vệ an ninh, an toàn lao động, phòng chống cháy nổ trong thời gian nghỉ ${cfg.title} tại Công ty EPS ngày ${dmy(date)} như sau:`, { first: 567, after: 120 });
     const det = P('2. Chi tiết bất thường, sự cố: (chỉ nêu khi có bất thường, sự cố thiết bị, mất an ninh hay xảy ra vi phạm AT-VSLĐ, ATGT, TNGT, PCCN)', { i: true, ind: 284, before: 120 });
     b += P('I. Các đơn vị nhiệt điện', { b: true, keep: true }) + P('1. Tình hình chung', { b: true, i: true, ind: 284, keep: true }) + plantTable(PLANTS.filter(p => !p.other)) + det + lines(incs.concat(atvs));
@@ -597,26 +600,29 @@ function buildRepDoc(kind, H, units, date, ctx, W) {
     b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban AT, KT-SX/EVNGENCO3;\n- Ban GĐ/EPS;\n- Các PXSC;\n- Lưu: KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'PHÒNG KỸ THUẬT – AN TOÀN/EPS', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
     return W.doc(b, { landscape: true, m: { t: 993, b: 851, l: 1418, r: 1134 } });
   }
-  b += hdr([{ t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', sz: 12 }, { t: 'CÁC ĐƠN VỊ', b: true, sz: 12 }],
+  b += hdr([{ t: 'CÔNG TY DỊCH VỤ SỬA CHỮA\nCÁC NHÀ MÁY ĐIỆN EVNGENCO3\n', sz: 12 }, { t: PXO ? PXI[PXO].name.toUpperCase() : 'CÁC ĐƠN VỊ', b: true, sz: 12 }],
     [{ t: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n', b: true, sz: 12 }, { t: 'Độc lập - Tự do - Hạnh phúc\n\n', b: true, sz: 13 }, { t: dateLine, i: true }]);
-  b += P('BÁO CÁO', { al: 'center', b: true, sz: 14, before: 240, after: 0 }) + P('Về tình hình bảo vệ an toàn, AT-VSLĐ, PCCN, sửa chữa và vận hành', { al: 'center', b: true, after: 0 }) + P(`dịp nghỉ ${cfg.title}`, { al: 'center', b: true, after: 0 }) + P(`(Từ ${from} ngày ${dmy(date)} đến 07h00 ngày ${dmy(nd)})`, { al: 'center', i: true, after: 240 });
-  b += P('1. Tình hình chung:', { b: true, keep: true }) + plantTable(PLANTS);
-  b += P('2. Chi tiết bất thường, sự cố: (chỉ nêu khi có bất thường, sự cố thiết bị)', { b: true, before: 120 }) + lines(incs);
-  b += P('3. Chi tiết AT-VSLĐ, PCCN, ATGT-TNGT (chỉ nêu khi xảy ra vi phạm AT-VSLĐ, ATGT, TNGT PCCN)', { b: true, before: 120 });
+  const span = one ? (DK[0].endsWith('c1') ? `(Ca ngày: từ 07h00 đến 19h00 ngày ${dmy(date)})` : `(Ca đêm: từ 19h00 ngày ${dmy(date)} đến 07h00 ngày ${dmy(nd)})`) : `(Từ ${from} ngày ${dmy(date)} đến 07h00 ngày ${dmy(nd)})`;
+  b += P(one ? 'BÁO CÁO CA TRỰC' : 'BÁO CÁO', { al: 'center', b: true, sz: 14, before: 240, after: 0 }) + P('Về tình hình bảo vệ an toàn, AT-VSLĐ, PCCN, sửa chữa và vận hành', { al: 'center', b: true, after: 0 }) + P(`dịp nghỉ ${cfg.title}`, { al: 'center', b: true, after: 0 }) + P(span, { al: 'center', i: true, after: 240 });
+  const myPl = PXO ? PLANTS.filter(p => p.a === PXI[PXO].area) : PLANTS; let sn = 0; const sec = t => `${++sn}. ${t}`;
+  if (myPl.length) b += P(sec('Tình hình chung:'), { b: true, keep: true }) + plantTable(myPl);
+  b += P(sec('Chi tiết bất thường, sự cố: (chỉ nêu khi có bất thường, sự cố thiết bị)'), { b: true, before: 120 }) + lines(incs);
+  b += P(sec('Chi tiết AT-VSLĐ, PCCN, ATGT-TNGT (chỉ nêu khi xảy ra vi phạm AT-VSLĐ, ATGT, TNGT PCCN)'), { b: true, before: 120 });
   const ok = atvs.length ? 'Xem ghi nhận bên dưới' : 'Đảm bảo';
   b += P('a. Tình hình AT-VSLĐ', { b: true, i: true, ind: 284 }) + P(`- Thiết bị: ${ok}`, { ind: 567 }) + P(`- Con người: ${ok}`, { ind: 567 }) + P(`- Biện pháp đã xử lý, giải quyết (nếu có): ${atvs.length ? '' : 'Không'}`, { ind: 567 }) + (atvs.length ? lines(atvs) : '');
   b += P('b. Tình hình PCCN', { b: true, i: true, ind: 284 }) + P('- Thiết bị: Đảm bảo', { ind: 567 }) + P('- Con người: Đảm bảo', { ind: 567 }) + P('- Biện pháp đã xử lý, giải quyết (nếu có): Không', { ind: 567 });
   b += P('c. Tình hình ATGT-TNGT', { b: true, i: true, ind: 284 }) + P('- Số vụ tai nạn giao thông xảy ra (nếu có): Không có', { ind: 567 });
-  b += P('4. Các công tác trong ca trực:', { b: true, before: 120, keep: true });
+  b += P(sec('Các công tác trong ca trực:'), { b: true, before: 120, keep: true });
   const rows = [['Stt', 'Nội dung công tác', 'Vị trí', 'Đang thực hiện', 'Hoàn thành', 'Ghi chú'].map(t => ({ t, b: true, al: 'center', fill: 'F2F2F2' }))];
-  repSections(units).forEach(sec => {
+  const secs = PXO ? repSections(units).filter(x => x.src.some(([id]) => id === PXO)).map(x => ({ h: x.h.replace('02 PXSC VT', PXI[PXO].name), src: x.src.filter(([id]) => id === PXO) })) : repSections(units);
+  secs.forEach(sec => {
     const items = []; sec.src.forEach(([id, g]) => DK.flatMap(k => repOf(units[id], k).works || []).forEach(w => { if (!w.t) return; if (g != null && (w.g || 0) !== g) return; items.push(w); }));
     rows.push([{ t: sec.h, b: true, span: 6, fill: 'FAFAFA' }]);
     if (!items.length) rows.push([{ t: '', al: 'center' }, { t: 'Không có công tác phát sinh', i: true }, '', '', '', '']);
     items.forEach((w, i) => rows.push([{ t: String(i + 1), al: 'center' }, w.t, { t: w.loc || '', al: 'center' }, { t: w.st === 'run' ? 'X' : '', al: 'center' }, { t: w.st === 'run' ? '' : 'X', al: 'center' }, w.note || '']));
   });
   b += T(rows, pw([5, 46, 13, 9, 9, 18]), { head: 1, sz: 12 });
-  b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
+  b += P('', { after: 120 }) + T([[{ t: [{ t: 'Nơi nhận:\n', b: true, i: true, sz: 12 }, { t: PXO ? '- Lãnh đạo Phân xưởng;\n- Phòng KT-AT (để tổng hợp);\n- Lưu: PX.' : '- Ban Lãnh đạo;\n- Các Phòng/ Phân xưởng;\n- Lưu: P.KT-AT.', sz: 11 }], va: 'top' }, { t: [{ t: 'Người báo cáo', b: true }], al: 'center', va: 'top' }]], pw([50, 50]), { noBorder: true });
   return W.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 

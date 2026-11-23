@@ -965,6 +965,8 @@ const ACT = {
     mutRep(el.dataset.px, curRepKey(), r => { r.works = (r.works || []).filter(w => w.t).concat(list); }); toast(`Đã thêm ${list.length} công tác.`); },
   repExport: el => repExport(el.dataset.k || S.panel.kind),
   prjView: el => { S.panel = { type: 'prjView', px: el.dataset.px, id: el.dataset.id }; render(); },
+  repPrevPx: el => { S.panel = { type: 'repPrev', px: el.dataset.px, scope: el.dataset.scope }; render(); },
+  repExportPx: () => repExportPx(),
   repPrev: el => { S.panel = { type: 'repPrev', kind: el.dataset.k }; render(); },
   impDo: () => { const P = S.panel; const R = P.res; let n = 0;
     mutPrj(P.px, P.id, p => { p.members = p.members || []; const have = new Set(p.members.map(m => m.sid).filter(Boolean)); const haveN = new Set(p.members.filter(m => !m.sid).map(m => normName(m.name)));
@@ -1165,7 +1167,7 @@ function viewRep(px) {
   const h = H(), date = curRepKey(), u = U(px), r = repOf(u, date), ed = canEditRep(px), dis = ed ? '' : 'disabled', units = allUnits();
   const plants = PLANTS.filter(p => p.a === PXI[px].area); const works = r.works || []; const ks = shiftKeys(h), di = ks.indexOf(date);
   const mates = PX.filter(p => p.area === PXI[px].area && p.id !== px).map(p => p.short);
-  let html = `<section class="card stack"><div class="row between"><div><h2>Báo cáo ca trực · ${shiftLabel(date)}/${date.slice(0, 4)}</h2><p class="hint">${shiftSpan(date)}. Nhập trước khi giao ca; Phòng KT-AT gộp ca ngày và ca đêm thành báo cáo ngày gửi TCT và báo cáo nội bộ.</p></div>${repShiftBar()}</div></section>`;
+  let html = `<section class="card stack"><div class="row between"><div><h2>Báo cáo ca trực · ${shiftLabel(date)}/${date.slice(0, 4)}</h2><p class="hint">${shiftSpan(date)}. Nhập trước khi giao ca; Phòng KT-AT gộp ca ngày và ca đêm thành báo cáo ngày gửi TCT và báo cáo nội bộ.</p></div>${repShiftBar()}</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="repPrevPx" data-px="${px}" data-scope="shift">Xem trước & xuất báo cáo ca này</button><button class="btn" data-act="repPrevPx" data-px="${px}" data-scope="day">Báo cáo cả ngày ${dm(date.split('|')[0])} (gộp ca ngày, ca đêm)</button></div></section>`;
   if (plants.length) html += `<section class="card stack"><h2>1. Tình hình nhà máy</h2><p class="hint">Bấm tên tổ máy ở cột Vận hành, Dự phòng hoặc Sửa chữa để chọn trạng thái (bấm lại để bỏ chọn). Ô chưa sửa lấy theo ca trước (hoặc mặc định "Bình thường"). ${mates.length ? `${esc(mates.join(', '))} cùng cập nhật bảng này; ứng dụng lấy nội dung sửa sau cùng.` : ''}</p>
     <div class="tbl" style="overflow-x:auto"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${plants.map(p => { const pv = plantVal(units, h, date, p.k);
       const src = pv.from && pv.from !== date ? `theo ${shiftLabel(pv.from).toLowerCase()}` : pv.by && pv.by !== px ? `${PXI[pv.by].short} cập nhật` : pv.from ? '' : 'mặc định';
@@ -1256,13 +1258,30 @@ function prjViewDrawer(P) {
     ${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}<p class="hint"><b style="color:var(--ink)">${ms.length}</b> người${ms.filter(m => !m.sid).length ? `, trong đó ${ms.filter(m => !m.sid).length} người thuê ngoài` : ''}</p>
     <div class="body">${rows || '<p class="hint">Chưa có nhân sự.</p>'}</div></aside>`;
 }
+function pxRepOpt(P) { const key = curRepKey(); const date = key.split('|')[0]; return { date, opt: { px: P.px, keys: P.scope === 'day' ? dayKeys(H(), date) : [key] } }; }
 function repPrevDrawer(P) {
-  const h = H(); if (!h) return ''; const date = curRepDate(); let html = '';
+  const h = H(); if (!h) return ''; if (P.px) return repPrevPxDrawer(P); const date = curRepDate(); let html = '';
   try { html = buildRepDoc(P.kind, HX(), allUnits(), date, ctx(), DH); } catch (e) { html = `<p class="hint">Không tạo được bản xem trước: ${esc(e.message || e)}</p>`; }
   return `<div class="scrim" data-act="close"></div><aside class="drawer wide" role="dialog" aria-label="Xem trước báo cáo"><div class="row between" style="flex-wrap:wrap;gap:8px"><div><h2>Xem trước báo cáo · ${wdShort(date)} ${dmy(date)}</h2><p class="hint">${repSpan(date)}</p></div>
     <div class="row" style="gap:6px;flex-wrap:wrap"><div class="seg" role="group" aria-label="Loại báo cáo"><button data-act="repPrev" data-k="eps" aria-pressed="${P.kind === 'eps'}">Nội bộ EPS</button><button data-act="repPrev" data-k="tct" aria-pressed="${P.kind === 'tct'}">Gửi TCT</button></div>
     <button class="btn primary" data-act="repExport" data-k="${P.kind}">Tải file Word</button><button class="btn" data-act="close">Đóng</button></div></div>
     <div class="body prevwrap">${html}</div></aside>`;
+}
+function repPrevPxDrawer(P) {
+  const { date, opt } = pxRepOpt(P); let html = '';
+  try { html = buildRepDoc('eps', HX(), allUnits(), date, ctx(), DH, opt); } catch (e) { html = `<p class="hint">Không tạo được bản xem trước: ${esc(e.message || e)}</p>`; }
+  const key = curRepKey(); const title = P.scope === 'day' ? `cả ngày ${wdShort(date)} ${dmy(date)}` : shiftLabel(key);
+  return `<div class="scrim" data-act="close"></div><aside class="drawer wide" role="dialog" aria-label="Xem trước báo cáo"><div class="row between" style="flex-wrap:wrap;gap:8px"><div><h2>Báo cáo ${esc(PXI[P.px].short)} · ${esc(title)}</h2><p class="hint">${P.scope === 'day' ? repSpan(date) : shiftSpan(key)}</p></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><div class="seg" role="group" aria-label="Phạm vi"><button data-act="repPrevPx" data-px="${P.px}" data-scope="shift" aria-pressed="${P.scope !== 'day'}">Ca này</button><button data-act="repPrevPx" data-px="${P.px}" data-scope="day" aria-pressed="${P.scope === 'day'}">Cả ngày</button></div>
+    <button class="btn primary" data-act="repExportPx">Tải file Word</button><button class="btn" data-act="close">Đóng</button></div></div>
+    <div class="body prevwrap">${html}</div></aside>`;
+}
+async function repExportPx() {
+  const P = S.panel; if (!P || !P.px) return; if (!dl) { toast('Chế độ xem này không cho tải file.'); return; }
+  const { date, opt } = pxRepOpt(P); const [y, m, d] = date.split('-'); const key = curRepKey();
+  try { const bytes = buildRepDoc('eps', HX(), allUnits(), date, ctx(), DW, opt);
+    await dl.save({ filename: `BC ${PXI[P.px].short} ${P.scope === 'day' ? 'ngay' : key.endsWith('c1') ? 'ca ngay' : 'ca dem'} ${d}.${m}.${y}.docx`, data: new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }) }); toast('Đã lưu file.'); }
+  catch (e) { if (!e || e.code !== 'declined') toast('Không xuất được file: ' + ((e && (e.message || e.code)) || e)); }
 }
 async function repExport(kind) {
   const h = H(); if (!h) return; if (!dl) { toast('Chế độ xem này không cho tải file.'); return; }
