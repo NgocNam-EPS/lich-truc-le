@@ -162,6 +162,10 @@ table.mx td{padding:0;vertical-align:top}
 .pghead .hint{margin-left:auto}
 .pgcaret{width:12px;color:var(--muted,#667)}
 .pgrp .cas{padding:8px}
+.cgrp{margin:6px 0 12px;padding-top:6px;border-top:1px solid var(--line,#dde3e0)}
+.cgrp:first-child{border-top:0;padding-top:0}
+.cgh{margin:4px 0 2px;color:var(--accent,#0f6b4f)}
+.cgrp h4{font-size:13px;margin:6px 0 2px;color:var(--muted,#667);font-weight:600}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
 .linkbtn b{color:var(--accent,#0f6b4f);text-decoration:underline;text-decoration-color:rgba(15,107,79,.35);text-underline-offset:3px}
 .linkbtn:hover b{text-decoration-color:currentColor}
@@ -1418,7 +1422,12 @@ function cellDrawer(P) {
   const line = e => `<div class="cand" style="cursor:default"><span class="grow"><b>${esc(personName(e, c))}</b>${e.nt ? ' <span class="badge nt">NT</span>' : ''}${e.k !== 'eps' ? ` <span class="badge k">${esc(KINDS[e.k])}</span>` : ''}<small>${esc([e.sid && IDX.get(e.sid) ? IDX.get(e.sid).title : (e.company || e.trade || ''), e.g].filter(Boolean).join(' · '))}</small></span><span class="k">${esc(personPhone(e, c) || '')}</span></div>`;
   return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Chi tiết ca trực"><div class="row between"><div><h2>${esc(PXI[P.px].name)}</h2><p class="hint">${caLabel(P.c)} · ${wdLong(P.d)} ${dmy(P.d)} · ${caTime(P.c)}</p></div><button class="btn sm" data-act="close">Đóng</button></div>
     ${cb ? `<p class="hint">Cán bộ phân xưởng trực: <b style="color:var(--ink)">${esc(cb.name)}</b>${c.phones[cb.id] ? ' · ' + esc(c.phones[cb.id]) : ''}</p>` : ''}
-    <div class="body">${ci.all.length || ci.os.length ? (() => { const isEps = e => !!e.sid && e.k !== 'os' && e.k !== 'thue'; const ea = ci.all.filter(isEps); const eps = ea.filter(e => e.nt).concat(ea.filter(e => !e.nt && e.k === 'eps'), ea.filter(e => !e.nt && e.k !== 'eps')); const ext = ntFirst(ci.all.filter(e => !isEps(e))).concat(ci.os); return (eps.length ? `<h3 style="margin:4px 0 0">Nhân sự EPS (${eps.length})</h3>` + eps.map(line).join('') : '') + (ext.length ? `<h3 style="margin:10px 0 0">Thuê ngoài, outsource (${ext.length})</h3>` + ext.map(line).join('') : ''); })() : `<p class="hint">${ci.fol ? 'Không bố trí, theo lịch trực tăng cường.' : 'Chưa có người trực.'}</p>`}</div></aside>`;
+    <div class="body">${ci.all.length || ci.os.length ? (() => { const isEps = e => !!e.sid && e.k !== 'os' && e.k !== 'thue';
+      const part = (all, os, h) => { const ea = all.filter(isEps); const eps = ea.filter(e => e.nt).concat(ea.filter(e => !e.nt && e.k === 'eps'), ea.filter(e => !e.nt && e.k !== 'eps')); const ext = ntFirst(all.filter(e => !isEps(e))).concat(os);
+        return (eps.length ? `<${h} style="margin:4px 0 0">Nhân sự EPS (${eps.length})</${h}>` + eps.map(line).join('') : '') + (ext.length ? `<${h} style="margin:10px 0 0">Thuê ngoài, outsource (${ext.length})</${h}>` + ext.map(line).join('') : ''); };
+      if (u.groups.length < 2) return part(ci.all, ci.os, 'h3');
+      return u.groups.map(g => { const a = ci.all.filter(e => e.g === g), o = ci.os.filter(e => e.g === g); const n = a.length + o.length; const t = (g || '').replace(/^tại\s+/i, ''); if (!n && optGroup(g)) return '';
+        return `<div class="cgrp"><h3 class="cgh">Tại ${esc(t)} <span class="hint">(${n} người)</span></h3>${n ? part(a, o, 'h4') : '<p class="hint">Chưa có người trực.</p>'}</div>`; }).join(''); })() : `<p class="hint">${ci.fol ? 'Không bố trí, theo lịch trực tăng cường.' : 'Chưa có người trực.'}</p>`}</div></aside>`;
 }
 
 /* ===== Công trình SCL, SXK, SCTX ===== */
