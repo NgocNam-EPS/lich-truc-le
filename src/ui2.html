@@ -250,7 +250,9 @@ const LEGAL = [
   { n: 6, t: 'Các văn bản khác', by: 'lead' }
 ];
 function filesOf(n, px) { return Object.values(S.files).filter(f => f && f.cat === n && (px === undefined || f.px === px)).sort((a, b) => a.at - b.at); }
-function legalDone(n) { return n === 4 ? PX.every(p => filesOf(4, p.id).length) : filesOf(n).length > 0; }
+/* Mục 5: công văn gửi từng đơn vị */
+const GENCOS = [{ id: 'nd-pm', name: 'Công ty Nhiệt điện Phú Mỹ' }, { id: 'nd-vt', name: 'Công ty Nhiệt điện Vĩnh Tân' }, { id: 'nd-md', name: 'Công ty Nhiệt điện Mông Dương' }, { id: 'nm-vt4', name: 'Nhà máy nhiệt điện Vĩnh Tân 4' }, { id: 'ops', name: 'Trung tâm OPS' }];
+function legalDone(n) { return n === 4 ? PX.every(p => filesOf(4, p.id).length) : n === 5 ? GENCOS.every(g => filesOf(5, g.id).length) : filesOf(n).length > 0; }
 function canUpload(n, px) { if (!ast || !S.me) return false; if (isAdmin()) return true; if (n === 4) return S.me.role === 'px' && S.me.px === px; return isLeadRole(); }
 function canDelFile(f) { return S.me && (isAdmin() || (f.by && f.by === S.me.u)); }
 function unitName(px) { return px === 'lead' ? LEAD_NAME : PXI[px].short; }
@@ -576,11 +578,12 @@ function viewLegal() {
     ${!ast && S.me && (isAdmin() || isLeadRole() || S.me.role === 'px') ? `<p class="notice">Tài khoản Claude bạn đang dùng chưa được cấp quyền tải tệp lên ứng dụng này${S.mode !== 'db' ? ' (hoặc ứng dụng đang mở ngoài claude.ai)' : ''}. Hãy nhờ quản trị mời email của bạn với quyền chỉnh sửa. Bạn vẫn xem và tải về được các văn bản đã có.</p>` : ''}</section>
   ${LEGAL.map(c => `<section class="lgcat"><div class="lghead"><span class="lgnum ${legalDone(c.n) ? 'done' : ''}">${legalDone(c.n) ? '✓' : c.n}</span><div class="grow"><h3>${c.n}. ${esc(c.t)}</h3><p class="hint">${who(c)}</p></div></div>
     ${c.n === 4 ? `<div class="pxslots">${PX.map(p => { const fs = filesOf(4, p.id); return `<div class="pxslot"><div class="row between"><b>${esc(p.short)}</b>${fs.length ? '<span class="pill approved">Đã nộp</span>' : '<span class="pill draft">Chưa nộp</span>'}</div>${fs.map(fileRow).join('')}${canUpload(4, p.id) ? uplForm(4, p.id) : ''}</div>`; }).join('')}</div>`
+      : c.n === 5 ? `<div class="pxslots">${GENCOS.map(g => { const fs = filesOf(5, g.id); return `<div class="pxslot"><div class="row between"><b>${esc(g.name)}</b>${fs.length ? '<span class="pill approved">Đã gửi</span>' : '<span class="pill draft">Chưa có</span>'}</div>${fs.map(fileRow).join('')}${canUpload(5) ? uplForm(5, g.id) : ''}</div>`; }).join('')}</div>${filesOf(5).filter(f => !GENCOS.some(g => g.id === f.px)).length ? `<p class="hint" style="margin-top:8px">Văn bản đã tải lên trước khi chia đơn vị:</p>${filesOf(5).filter(f => !GENCOS.some(g => g.id === f.px)).map(fileRow).join('')}` : ''}`
       : `${filesOf(c.n).map(fileRow).join('') || '<p class="hint">Chưa có văn bản.</p>'}${canUpload(c.n) ? uplForm(c.n) : ''}`}
   </section>`).join('')}`;
 }
 function legalChecklist() {
-  return `<div class="checkl">${LEGAL.map(c => `<div><span class="lgnum ${legalDone(c.n) ? 'done' : ''}" style="width:22px;height:22px;font-size:11px">${legalDone(c.n) ? '✓' : c.n}</span><span>${esc(c.t)}${c.n === 4 ? ` <b>(${PX.filter(p => filesOf(4, p.id).length).length}/7 PX)</b>` : ''}</span></div>`).join('')}</div>`;
+  return `<div class="checkl">${LEGAL.map(c => `<div><span class="lgnum ${legalDone(c.n) ? 'done' : ''}" style="width:22px;height:22px;font-size:11px">${legalDone(c.n) ? '✓' : c.n}</span><span>${esc(c.t)}${c.n === 4 ? ` <b>(${PX.filter(p => filesOf(4, p.id).length).length}/7 PX)</b>` : c.n === 5 ? ` <b>(${GENCOS.filter(g => filesOf(5, g.id).length).length}/${GENCOS.length} đơn vị)</b>` : ''}</span></div>`).join('')}</div>`;
 }
 async function fileBlob(f) { const r = await fetch('/_blob/' + f.assetId); if (!r.ok) throw new Error('Không tải được tệp (' + r.status + ')'); return r.blob(); }
 
