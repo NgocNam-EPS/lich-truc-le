@@ -788,6 +788,17 @@ function viewPrjAll() {
 }
 
 /* ===== Quản trị: tổng hợp ===== */
+function extCheckCard(h, c) {
+  const all = PX.flatMap(p => extNameHits(U(p.id), h, c).map(x => Object.assign({ px: p.id }, x)));
+  if (!all.length) return `<section class="card stack"><h3>Kiểm tra nhầm loại nhân sự</h3><p class="notice good">Không có người nào nhập là Thuê ngoài/Outsource mà trùng tên nhân sự EPS.</p></section>`;
+  const fixable = all.filter(x => x.pick);
+  return `<section class="card stack"><div class="row between" style="flex-wrap:wrap;gap:8px"><div><h3>Kiểm tra nhầm loại nhân sự (${all.length})</h3><p class="hint">Các người dưới đây đang nhập là Thuê ngoài/Outsource nhưng họ tên trùng nhân sự EPS, thường là người Ca SCTX nhập nhầm loại. Kiểm tra rồi chuyển đúng loại; nhóm trưởng (NT) và vị trí được giữ nguyên.</p></div>
+    ${fixable.length ? `<button class="btn" data-act="extFixAll">Chuyển tất cả ${fixable.length} người thành Ca SCTX</button>` : ''}</div>
+    <div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th>Ở đâu</th><th>Họ tên</th><th>Đang nhập là</th><th>Trùng nhân sự EPS</th><th></th></tr></thead><tbody>${all.map((x, xi) => `<tr><td><b>${esc(PXI[x.px].short)}</b></td><td>${esc(x.where)}</td><td>${esc(x.e.name)}</td><td>${esc(KINDS[x.e.k])}</td>
+      <td>${x.pick ? `${esc(x.pick.id)} · ${esc(x.pick.title)} · ${esc(x.pick.dept)}` : `<select id="exs_${xi}" aria-label="Chọn đúng người"><option value="">— ${x.cands.length} người trùng tên, chọn đúng người —</option>${x.cands.map(s => `<option value="${esc(s.id)}">${esc(s.id)} · ${esc(s.title)} · ${esc(s.dept)}</option>`).join('')}</select>`}</td>
+      <td><div class="row" style="gap:4px;flex-wrap:nowrap">${['sctx', 'eps'].map(to => `<button class="btn sm" data-act="extFix" data-px="${x.px}" data-kind="${x.kind}" data-key="${esc(x.key)}" data-i="${x.i}" data-sid="${x.pick ? esc(x.pick.id) : ''}" data-sel="${x.pick ? '' : 'exs_' + xi}" data-to="${to}">${to === 'sctx' ? 'Ca SCTX' : 'Nhân sự EPS'}</button>`).join('')}</div></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+function extFix(px, kind, key, i, sid, to) { mutUnit(px, u => { const l = (u[kind] || {})[key]; const e = l && l[i]; if (!e || e.sid) return; const n = { k: to, sid }; ['nt', 'g', 'c', 'note'].forEach(f => { if (e[f] != null) n[f] = e[f]; }); l[i] = n; }); }
 function viewOverview() {
   const h = H(); const c = ctx();
   const info = PX.map(p => { const u = U(p.id); const ck = checkUnit(u, h, c); const ppl = otRows(u, h, c); return { p, u, ck, ppl }; });
@@ -798,6 +809,7 @@ function viewOverview() {
   return `<section class="card stack"><div class="row between"><div><h2>${esc(h.name)}</h2><p class="hint">${h.days.map(d => `${wdShort(d.date)} ${dmy(d.date)}${!d.ca1 ? ' (từ 19h00)' : ''}`).join(' · ')}</p></div></div>
     <div class="stats"><div class="stat"><b>${ok}/8</b><span>Đơn vị đã duyệt (7 PX + P.KT-AT)</span></div><div class="stat"><b>${sub}</b><span>Đang chờ duyệt</span></div>
     <div class="stat ${over ? 'bad' : ''}"><b>${over}</b><span>Người vượt giới hạn giờ làm thêm</span></div><div class="stat ${leadMiss ? 'bad' : ''}"><b>${leadMiss}</b><span>Ngày chưa có lãnh đạo trực</span></div></div></section>
+  ${extCheckCard(h, c)}
   <section class="card stack"><div class="row between"><h3>Văn bản pháp lý</h3><button class="btn sm" data-act="tab" data-v="legal">Quản lý văn bản</button></div>${legalChecklist()}</section>
   <section class="card stack"><h3>Xuất file Excel để in ký</h3>
     ${ok < 8 ? `<p class="notice">Còn ${8 - ok} đơn vị chưa được duyệt. File xuất lúc này có thể thiếu dữ liệu.</p>` : '<p class="notice good">Đã đủ dữ liệu. Các file sẵn sàng để in ký.</p>'}
@@ -977,6 +989,8 @@ function outForm(e, gc, u) {
 function mutUnit(px, fn) { const u = px === 'lead' ? LU() : clone(U(px)); fn(u); saveUnit(px, u); }
 function mutHol(fn) { const h = clone(H()); fn(h); saveHoliday(h); }
 const ACT = {
+  extFix: el => { const sid = el.dataset.sid || (E(el.dataset.sel) || {}).value; if (!sid) { toast('Chọn đúng người trong danh sách trùng tên trước.'); return; } extFix(el.dataset.px, el.dataset.kind, el.dataset.key, +el.dataset.i, sid, el.dataset.to); toast('Đã chuyển thành ' + KINDS[el.dataset.to] + '.'); },
+  extFixAll: () => { const h = H(), c = ctx(); let n = 0; PX.forEach(p => { const hs = extNameHits(U(p.id), h, c).filter(x => x.pick); if (!hs.length) return; mutUnit(p.id, u => { hs.forEach(x => { const l = (u[x.kind] || {})[x.key]; const e = l && l[x.i]; if (!e || e.sid) return; const nn = { k: 'sctx', sid: x.pick.id }; ['nt', 'g', 'c', 'note'].forEach(f => { if (e[f] != null) nn[f] = e[f]; }); l[x.i] = nn; n++; }); }); }); toast(`Đã chuyển ${n} người thành Ca SCTX.`); },
   repUnit: el => { const px = el.dataset.px, k = el.dataset.k, key = curRepKey(); const pl = PLANTS.find(p => p.k === k); const cur = plantVal(allUnits(), H(), key, k).v; const us = unitStates(pl, cur); const note = repNoteOf(pl, cur);
     if (us[el.dataset.u] === el.dataset.s) delete us[el.dataset.u]; else us[el.dataset.u] = el.dataset.s;
     mutRep(px, key, r => { r.plants = r.plants || {}; r.plants[k] = Object.assign({}, cur, unitStrings(pl, us, note), { units: us, repNote: note, ts: Date.now() }); }); },

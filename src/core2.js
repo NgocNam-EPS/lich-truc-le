@@ -123,6 +123,17 @@ function otRows(u, H, ctx) {
 /* ===== Kiểm tra đủ dữ liệu trước khi gửi duyệt ===== */
 /* Vị trí trực không bắt buộc: để trống vẫn gửi duyệt được (NMNĐ Phú Mỹ 3, NMNĐ Phú Mỹ 2.2) */
 const optGroup = g => /Phú Mỹ (3|2\.2)\b/.test(g || '');
+/* Người nhập là Thuê ngoài/Outsource nhưng họ tên trùng nhân sự EPS (thường là Ca SCTX nhập nhầm loại) */
+function staffByName(ctx) { if (!ctx._byName) { const m = new Map(); ctx.idx.forEach(s => { const k = normName(s.name); if (!m.has(k)) m.set(k, []); m.get(k).push(s); }); ctx._byName = m; } return ctx._byName; }
+function extNameHits(u, H, ctx) {
+  const by = staffByName(ctx); const dept = (PXI[u.px] || {}).dept; const hits = []; const days = new Set(H.days.map(d => d.date));
+  [['roster', 'Lịch ca'], ['tc', 'Tăng cường'], ['hd', 'Huy động']].forEach(([kind, lb]) => Object.entries(u[kind] || {}).forEach(([key, list]) => {
+    const d = key.split('|')[0]; if (!days.has(d)) return;
+    (list || []).forEach((e, i) => { if (e.sid || (e.k !== 'thue' && e.k !== 'os')) return; const l = by.get(normName(e.name)); if (!l || !l.length) return;
+      const own = l.filter(s => s.dept === dept); const pick = own.length === 1 ? own[0] : l.length === 1 ? l[0] : null;
+      const [, c, gi] = key.split('|'); hits.push({ kind, key, i, e, cands: l, pick, where: `${lb} ${c ? caName(c) + ' ' : ''}${dmy(d)}${gi != null && u.groups[+gi] ? ' ' + u.groups[+gi] : ''}` }); }); }));
+  return hits;
+}
 function checkUnit(u, H, ctx) {
   const err = [], warn = []; const p = PXI[u.px];
   H.days.forEach(day => {
@@ -138,6 +149,7 @@ function checkUnit(u, H, ctx) {
     Object.entries(perCa).forEach(([sid, set]) => { if (set.size > 1) warn.push(`${(ctx.idx.get(sid) || {}).name || sid} trực cả 2 ca ngày ${dmy(day.date)} (24 giờ liên tục)`); });
     if (!u.canbo[day.date]) warn.push(`Chưa chọn cán bộ phân xưởng trực ngày ${dmy(day.date)}`);
   });
+  extNameHits(u, H, ctx).forEach(x => warn.push(`${x.where}: "${x.e.name}" đang nhập là ${KINDS[x.e.k]} nhưng trùng tên nhân sự EPS${x.pick ? ` (${x.pick.id} · ${x.pick.dept})` : ''}; nếu là người Ca SCTX hoặc nhân sự EPS hãy xóa và thêm lại đúng loại`));
   const rows = otRows(u, H, ctx);
   const miss = rows.filter(r => r.m == null || r.y == null); if (miss.length) err.push(`${miss.length} người chưa nhập giờ làm thêm lũy kế (tháng và năm)`);
   const over = rows.filter(r => r.level === 'over'); if (over.length) warn.push(`${over.length} người vượt giới hạn giờ làm thêm`);
@@ -626,4 +638,4 @@ function buildRepDoc(kind, H, units, date, ctx, W, o) {
   return W.doc(b, { landscape: true, m: { t: 1440, b: 1134, l: 1440, r: 1440 } });
 }
 
-if (typeof module !== 'undefined') module.exports = { unitStates, unitStrings, shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
+if (typeof module !== 'undefined') module.exports = { extNameHits, unitStates, unitStrings, shiftKeys, dayKeys, PLANTS, PFIELDS, plantVal, repOf, buildRepDoc, repSections, optGroup, otHours, shiftOt, fh, buildPRJ, prjOn, buildPX, outsideRows, PX, PXI, toStaff, defaultUnit, normUnit, dutyMap, otRows, checkUnit, buildDK01, buildDK02, buildDK03, buildDK06, buildOT, rkey, caList };
