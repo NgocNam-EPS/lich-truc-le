@@ -1422,11 +1422,10 @@ function prjGroups(px, list) {
   list.forEach(m => { const s2 = m.sid && IDX.get(m.sid); const d = s2 ? (s2.dept || 'Khác') : 'Thuê ngoài'; if (!g.has(d)) g.set(d, []); g.get(d).push(m); });
   return [...g.entries()].sort((a, b) => (a[0] === own ? -1 : b[0] === own ? 1 : a[0] === 'Thuê ngoài' ? 1 : b[0] === 'Thuê ngoài' ? -1 : b[1].length - a[1].length || a[0].localeCompare(b[0]))).map(([d, l]) => ({ d, l, nt: l.filter(m => m.nt).length }));
 }
-function prjGroupOpen(pid, d, total) { const k = pid + '|' + d; return S.prjG && k in S.prjG ? S.prjG[k] : total <= 40; }
+function prjGroupOpen(pid, d, total) { const k = pid + '|' + d; return S.prjG && k in S.prjG ? S.prjG[k] : false; }
 function prjGroupedHtml(px, p, list, rowFn) {
   const gs = prjGroups(px, list); if (!list.length) return '<p class="hint">Chưa có nhân sự.</p>';
   const sum = `<div class="pgsum">${gs.map(x => `<span class="pgchip"><b>${x.l.length}</b> ${esc(x.d)}</span>`).join('')}</div>`;
-  if (gs.length === 1 && list.length <= 40) return sum + `<div class="cas">${list.map(rowFn).join('')}</div>`;
   return sum + gs.map(x => { const op = prjGroupOpen(p.id, x.d, list.length);
     return `<div class="pgrp"><button class="pghead" data-act="prjG" data-k="${esc(p.id + '|' + x.d)}" aria-expanded="${op}"><span class="pgcaret">${op ? '▾' : '▸'}</span><b>${esc(x.d)}</b><span class="hint">${x.l.length} người${x.nt ? ` · ${x.nt} TN` : ''}</span></button>${op ? `<div class="cas">${x.l.map(rowFn).join('')}</div>` : ''}</div>`; }).join('');
 }
