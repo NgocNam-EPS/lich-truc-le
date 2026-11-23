@@ -660,6 +660,18 @@ function memberChip(px, p, m, i, ed) {
   return `<div class="chip ${m.nt ? 'isnt' : ''}"><span class="nm" style="cursor:default"><b>${esc(personName(m, c))}</b>${m.k !== 'eps' ? ' <span class="badge k">Thuê ngoài</span>' : ''}<small>${esc(sub || ' ')}</small>${other.length ? `<small style="color:var(--danger)">Trùng thời gian: ${esc(other.map(q => q.name).join(', '))}</small>` : ''}</span>
     ${ed ? `<button class="ntbtn ${m.nt ? 'on' : ''}" title="Trưởng nhóm" data-act="prjNt" data-px="${px}" data-id="${esc(p.id)}" data-i="${i}">TN</button><button class="x" aria-label="Bỏ" data-act="prjRm" data-px="${px}" data-id="${esc(p.id)}" data-i="${i}">×</button>` : (m.nt ? '<span class="badge nt">TN</span>' : '')}</div>`;
 }
+function prjCardHtml(px, p, ed, today) { const dis = ed ? '' : 'disabled'; const st = PRJ_ST[prjStatus(p, today)]; const ms = ntFirst(p.members || []).map(m => Object.assign({}, m, { _i: (p.members || []).indexOf(m) }));
+    return `<section class="card stack"><div class="row between"><div class="row" style="gap:8px"><span class="pill ${p.type === 'SCL' ? 'returned' : p.type === 'SXK' ? 'submitted' : 'approved'}">${esc(p.type)}</span><span class="pill ${st[1]}">${st[0]}</span>${prjOverlapHol(p) ? '<span class="pill returned">Trùng dịp lễ</span>' : ''}<span class="hint">${(p.members || []).length} người</span></div>
+      ${ed ? `<button class="btn sm danger ${S.armed === 'prjDel' + p.id ? 'armed' : ''}" data-act="prjDel" data-px="${px}" data-id="${esc(p.id)}">${S.armed === 'prjDel' + p.id ? 'Bấm lần nữa để xóa' : 'Xóa công trình'}</button>` : ''}</div>
+      <div class="row"><label class="field grow" style="min-width:240px"><span>Tên công trình</span><input id="pn_${esc(p.id)}" type="text" value="${esc(p.name)}" data-ch="prjF" data-f="name" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label>
+        <label class="field"><span>Loại</span><select id="pt_${esc(p.id)}" data-ch="prjF" data-f="type" data-px="${px}" data-id="${esc(p.id)}" ${dis}>${Object.entries(PRJ_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${k} – ${v}</option>`).join('')}</select></label>
+        <label class="field"><span>Địa điểm</span><input id="ps_${esc(p.id)}" type="text" value="${esc(p.site || '')}" data-ch="prjF" data-f="site" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label>
+        <label class="field"><span>Bắt đầu</span><input id="pf_${esc(p.id)}" type="date" value="${esc(p.from || '')}" data-ch="prjF" data-f="from" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label>
+        <label class="field"><span>Kết thúc</span><input id="pe_${esc(p.id)}" type="date" value="${esc(p.to || '')}" data-ch="prjF" data-f="to" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label></div>
+      <label class="field"><span>Ghi chú</span><input id="pg_${esc(p.id)}" type="text" value="${esc(p.note || '')}" data-ch="prjF" data-f="note" data-px="${px}" data-id="${esc(p.id)}" ${dis} placeholder="vd: số quyết định, phạm vi công việc"></label>
+      <div class="cas">${ms.map(m => memberChip(px, p, m, m._i, ed)).join('') || '<p class="hint">Chưa có nhân sự.</p>'}</div>
+      ${ed ? `<div class="row" style="gap:6px"><button class="add grow" data-act="prjOpen" data-px="${px}" data-id="${esc(p.id)}">+ Nhân sự EPS</button><button class="add grow" data-act="prjOpen" data-kind="out" data-px="${px}" data-id="${esc(p.id)}">+ Người thuê ngoài</button><label class="add grow" style="text-align:center;cursor:pointer" title="Chọn tệp Excel có danh sách họ tên, ứng dụng tự dò trong danh sách nhân sự EPS">⇪ Nhập danh sách từ Excel<input type="file" accept=".xlsx,.xls,.csv" hidden data-ch="prjXl" data-px="${px}" data-id="${esc(p.id)}"></label></div>` : ''}
+    </section>`; }
 function viewProjects(px) {
   const ed = canEditPrj(px); const today = todayIso(); const all = prjList(px).sort((a, b) => (b.from || '').localeCompare(a.from || ''));
   const list = all.filter(p => !S.prjHideDone || prjStatus(p, today) !== 'xong'); const dis = ed ? '' : 'disabled';
@@ -675,18 +687,7 @@ function viewProjects(px) {
     <label class="field"><span>Địa điểm</span><input id="np_site" type="text" placeholder="vd: NMNĐ Vĩnh Tân 2"></label>
     <label class="field"><span>Bắt đầu</span><input id="np_from" type="date" required></label><label class="field"><span>Kết thúc</span><input id="np_to" type="date"></label></div>
     <div><button class="btn primary" type="submit">Thêm công trình</button></div></form>` : ''}
-  ${list.map(p => { const st = PRJ_ST[prjStatus(p, today)]; const ms = ntFirst(p.members || []).map(m => Object.assign({}, m, { _i: (p.members || []).indexOf(m) }));
-    return `<section class="card stack"><div class="row between"><div class="row" style="gap:8px"><span class="pill ${p.type === 'SCL' ? 'returned' : p.type === 'SXK' ? 'submitted' : 'approved'}">${esc(p.type)}</span><span class="pill ${st[1]}">${st[0]}</span>${prjOverlapHol(p) ? '<span class="pill returned">Trùng dịp lễ</span>' : ''}<span class="hint">${(p.members || []).length} người</span></div>
-      ${ed ? `<button class="btn sm danger ${S.armed === 'prjDel' + p.id ? 'armed' : ''}" data-act="prjDel" data-px="${px}" data-id="${esc(p.id)}">${S.armed === 'prjDel' + p.id ? 'Bấm lần nữa để xóa' : 'Xóa công trình'}</button>` : ''}</div>
-      <div class="row"><label class="field grow" style="min-width:240px"><span>Tên công trình</span><input id="pn_${esc(p.id)}" type="text" value="${esc(p.name)}" data-ch="prjF" data-f="name" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label>
-        <label class="field"><span>Loại</span><select id="pt_${esc(p.id)}" data-ch="prjF" data-f="type" data-px="${px}" data-id="${esc(p.id)}" ${dis}>${Object.entries(PRJ_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${k} – ${v}</option>`).join('')}</select></label>
-        <label class="field"><span>Địa điểm</span><input id="ps_${esc(p.id)}" type="text" value="${esc(p.site || '')}" data-ch="prjF" data-f="site" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label>
-        <label class="field"><span>Bắt đầu</span><input id="pf_${esc(p.id)}" type="date" value="${esc(p.from || '')}" data-ch="prjF" data-f="from" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label>
-        <label class="field"><span>Kết thúc</span><input id="pe_${esc(p.id)}" type="date" value="${esc(p.to || '')}" data-ch="prjF" data-f="to" data-px="${px}" data-id="${esc(p.id)}" ${dis}></label></div>
-      <label class="field"><span>Ghi chú</span><input id="pg_${esc(p.id)}" type="text" value="${esc(p.note || '')}" data-ch="prjF" data-f="note" data-px="${px}" data-id="${esc(p.id)}" ${dis} placeholder="vd: số quyết định, phạm vi công việc"></label>
-      <div class="cas">${ms.map(m => memberChip(px, p, m, m._i, ed)).join('') || '<p class="hint">Chưa có nhân sự.</p>'}</div>
-      ${ed ? `<div class="row" style="gap:6px"><button class="add grow" data-act="prjOpen" data-px="${px}" data-id="${esc(p.id)}">+ Nhân sự EPS</button><button class="add grow" data-act="prjOpen" data-kind="out" data-px="${px}" data-id="${esc(p.id)}">+ Người thuê ngoài</button><label class="add grow" style="text-align:center;cursor:pointer" title="Chọn tệp Excel có danh sách họ tên, ứng dụng tự dò trong danh sách nhân sự EPS">⇪ Nhập danh sách từ Excel<input type="file" accept=".xlsx,.xls,.csv" hidden data-ch="prjXl" data-px="${px}" data-id="${esc(p.id)}"></label></div>` : ''}
-    </section>`; }).join('') || `<section class="card"><p class="hint">${all.length ? 'Không có công trình đang hoặc sắp thực hiện.' : 'Chưa có công trình nào.'}</p></section>`}`;
+  ${list.map(p => prjCardHtml(px, p, ed, today)).join('') || `<section class="card"><p class="hint">${all.length ? 'Không có công trình đang hoặc sắp thực hiện.' : 'Chưa có công trình nào.'}</p></section>`}`;
 }
 /* Nhập danh sách nhân sự công trình từ Excel: dò họ tên (hoặc số hiệu EPS-xxxx) trong danh sách nhân sự EPS */
 const foldName = s => normName(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
@@ -749,14 +750,14 @@ function viewPrjAll() {
   const holPeople = new Set(); list.filter(prjOverlapHol).forEach(p => (p.members || []).forEach(m => m.sid && holPeople.add(m.sid)));
   list = list.filter(p => (!F.px || p.px === F.px) && (!F.type || p.type === F.type) && (!F.st || prjStatus(p, today) === F.st)).sort((a, b) => PX.findIndex(x => x.id === a.px) - PX.findIndex(x => x.id === b.px) || (b.from || '').localeCompare(a.from || ''));
   const c = ctx();
-  return `<section class="card stack"><div class="row between"><div><h2>Công trình SCL, SXK, SCTX của các phân xưởng</h2><p class="hint">Các phân xưởng tự cập nhật ở tab Công trình của mình.</p></div><button class="btn" data-act="prjExport" data-px="">Xuất Excel tất cả</button></div>
+  return `<section class="card stack"><div class="row between"><div><h2>Công trình SCL, SXK, SCTX của các phân xưởng</h2><p class="hint">Các phân xưởng tự cập nhật ở tab Công trình của mình.${isAdmin() ? ' Quản trị bấm vào tên công trình để sửa thông tin, nhân sự hoặc xóa công trình.' : ''}</p></div><button class="btn" data-act="prjExport" data-px="">Xuất Excel tất cả</button></div>
     <div class="stats"><div class="stat"><b>${allProjects().filter(p => prjStatus(p, today) === 'dang').length}</b><span>Công trình đang thực hiện</span></div><div class="stat"><b>${people.size}</b><span>Nhân sự đang ở công trình</span></div><div class="stat ${holPeople.size ? 'bad' : ''}"><b>${holPeople.size}</b><span>Nhân sự ở công trình trùng dịp lễ</span></div></div>
     <div class="row"><select id="pfpx" data-ch="prjFilt" data-f="px"><option value="">Tất cả phân xưởng</option>${PX.map(p => `<option value="${p.id}" ${F.px === p.id ? 'selected' : ''}>${esc(p.short)}</option>`).join('')}</select>
       <select id="pftype" data-ch="prjFilt" data-f="type"><option value="">Mọi loại</option>${Object.keys(PRJ_TYPES).map(k => `<option ${F.type === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
       <select id="pfst" data-ch="prjFilt" data-f="st"><option value="">Mọi trạng thái</option>${Object.entries(PRJ_ST).map(([k, v]) => `<option value="${k}" ${F.st === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
     <div class="tbl scroll"><table class="list"><thead><tr><th>Phân xưởng</th><th>Công trình</th><th>Loại</th><th>Thời gian</th><th>Trạng thái</th><th>Nhân sự</th></tr></thead><tbody>
     ${list.map(p => { const st = PRJ_ST[prjStatus(p, today)]; const ms = ntFirst(p.members || []);
-      return `<tr><td><b>${esc(PXI[p.px] ? PXI[p.px].short : p.px)}</b></td><td><button class="linkbtn" data-act="prjView" data-px="${p.px}" data-id="${esc(p.id)}" title="Xem danh sách nhân sự"><b>${esc(p.name)}</b></button>${p.site ? `<br><span class="hint">${esc(p.site)}</span>` : ''}${prjOverlapHol(p) ? '<br><span class="pill returned">Trùng dịp lễ</span>' : ''}</td><td>${esc(p.type)}</td><td style="white-space:nowrap">${p.from ? dmy(p.from) : '…'} – ${p.to ? dmy(p.to) : '…'}</td><td><span class="pill ${st[1]}">${st[0]}</span></td>
+      return `<tr><td><b>${esc(PXI[p.px] ? PXI[p.px].short : p.px)}</b></td><td><button class="linkbtn" data-act="prjView" data-px="${p.px}" data-id="${esc(p.id)}" title="${isAdmin() ? 'Sửa, xóa công trình' : 'Xem danh sách nhân sự'}"><b>${esc(p.name)}</b></button>${p.site ? `<br><span class="hint">${esc(p.site)}</span>` : ''}${prjOverlapHol(p) ? '<br><span class="pill returned">Trùng dịp lễ</span>' : ''}</td><td>${esc(p.type)}</td><td style="white-space:nowrap">${p.from ? dmy(p.from) : '…'} – ${p.to ? dmy(p.to) : '…'}</td><td><span class="pill ${st[1]}">${st[0]}</span></td>
         <td><button class="linkbtn" data-act="prjView" data-px="${p.px}" data-id="${esc(p.id)}"><b>${ms.length} người</b></button><br><span class="hint">${esc(ms.slice(0, 8).map(m => personName(m, c) + (m.nt ? ' (TN)' : '')).join(', '))}${ms.length > 8 ? '…' : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="6" class="hint">Chưa có công trình.</td></tr>'}
     </tbody></table></div></section>`;
 }
@@ -977,7 +978,7 @@ const ACT = {
   pxTab: el => { S.pxTab = el.dataset.v; render(); },
   openPx: el => { S.pxSel = el.dataset.px; S.pxTab = 'roster'; S.tab = 'px'; render(); },
   logout: () => { setSession(null); S.me = null; S.tab = null; render(); },
-  close: () => { if (S.panel && S.panel.url) URL.revokeObjectURL(S.panel.url); S.panel = null; S.q.cand = ''; render(); },
+  close: () => { if (S.panel && S.panel.url) URL.revokeObjectURL(S.panel.url); S.panel = (S.panel && S.panel.back) || null; S.q.cand = ''; render(); },
   addOpen: el => { S.panel = { type: 'add', path: el.dataset.path }; S.q.cand = ''; S.candKind = el.dataset.kind === 'out' ? 'out' : (S.candKind === 'out' ? 'eps' : S.candKind); render(); setTimeout(() => E('qcand') && E('qcand').focus(), 0); },
   editEntry: el => { S.panel = { type: 'add', path: el.dataset.path, i: +el.dataset.i }; S.q.cand = ''; render(); },
   candKind: el => { S.candKind = el.dataset.v; render(); },
@@ -1047,14 +1048,14 @@ const ACT = {
   delFile: async el => { const id = el.dataset.id; const k = 'delFile' + id; if (S.armed !== k) { S.armed = k; render(); return; } S.armed = null; const f = S.files[id]; if (!f) return;
     try { if (ast) await ast.delete(f.assetId); } catch (e) { if (e && e.code !== 'not_found') toast('Đã gỡ văn bản khỏi danh sách; tệp gốc chỉ người tải lên mới xóa được.'); }
     delete S.files[id]; queue(`holidays/${S.cur}/files/${id}`, () => null); render(); },
-  prjOpen: el => { S.panel = { type: 'prj', px: el.dataset.px, id: el.dataset.id }; S.q.cand = ''; S.candKind = el.dataset.kind === 'out' ? 'out' : 'eps'; render(); setTimeout(() => E('qcand') && E('qcand').focus(), 0); },
+  prjOpen: el => { const back = S.panel && S.panel.type === 'prjView' ? S.panel : null; S.panel = { type: 'prj', px: el.dataset.px, id: el.dataset.id, back }; S.q.cand = ''; S.candKind = el.dataset.kind === 'out' ? 'out' : 'eps'; render(); setTimeout(() => E('qcand') && E('qcand').focus(), 0); },
   prjPick: el => { const P = S.panel; mutPrj(P.px, P.id, p => { p.members = p.members || []; p.members.push({ sid: el.dataset.sid, k: 'eps' }); }); S.q.cand = ''; render(); setTimeout(() => E('qcand') && E('qcand').focus(), 0); },
   prjPickOut: el => { const P = S.panel; const o = outList(P.px)[+el.dataset.i]; if (!o) return; mutPrj(P.px, P.id, p => { p.members = p.members || []; p.members.push({ name: o.name, k: 'thue', company: o.company || '', trade: o.trade || '', phone: o.phone || '' }); }); },
   prjAddOut: () => { const P = S.panel; const n = E('of_n').value.trim(); if (!n) { toast('Nhập họ tên.'); return; }
     mutPrj(P.px, P.id, p => { p.members = p.members || []; p.members.push({ name: n, k: 'thue', company: E('of_c').value.trim(), trade: E('of_t').value.trim(), phone: E('of_p').value.trim() }); }); toast('Đã thêm ' + n); },
   prjNt: el => mutPrj(el.dataset.px, el.dataset.id, p => { const m = p.members[+el.dataset.i]; if (m) m.nt = !m.nt; }),
   prjRm: el => mutPrj(el.dataset.px, el.dataset.id, p => p.members.splice(+el.dataset.i, 1)),
-  prjDel: el => { const k = 'prjDel' + el.dataset.id; if (S.armed !== k) { S.armed = k; render(); return; } S.armed = null; savePrj(el.dataset.px, prjList(el.dataset.px).filter(p => p.id !== el.dataset.id)); toast('Đã xóa công trình.'); },
+  prjDel: el => { const k = 'prjDel' + el.dataset.id; if (S.armed !== k) { S.armed = k; render(); return; } S.armed = null; savePrj(el.dataset.px, prjList(el.dataset.px).filter(p => p.id !== el.dataset.id)); if (S.panel && S.panel.type === 'prjView' && S.panel.id === el.dataset.id) S.panel = null; toast('Đã xóa công trình.'); },
   prjExport: el => doExport('PRJ', el.dataset.px || null),
   createViewer: async () => { const a = { u: 'lanhdao', role: 'viewer', name: 'Lãnh đạo' }; if (S.accounts.some(x => x.u === a.u)) a.u = 'xem' + randStr(3, '0123456789');
     const pw = newPw(); await setPassword(a, pw); S.accounts.push(a); S.newCreds = `Tài khoản chỉ xem  Tên đăng nhập: ${a.u}   Mật khẩu: ${pw}`; saveAccounts(); },
@@ -1249,7 +1250,9 @@ function viewRepAll() {
   <section class="card stack"><h2>Tình hình chung các nhà máy</h2><div class="tbl scroll"><table class="list rept"><thead><tr><th>Nhà máy</th>${PFIELDS.map(f => `<th>${f[1]}</th>`).join('')}</tr></thead><tbody>${PLANTS.map(p => { const v = plantVal(units, h, date, p.k).v; return `<tr><td><b>${esc(p.n)}</b></td>${PFIELDS.map(f => `<td>${esc(v[f[0]] || '-')}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></section>${viewRepEval(h, units)}`;
 }
 function prjViewDrawer(P) {
-  const p = prjList(P.px).find(x => x.id === P.id); if (!p) return ''; const c = ctx(); const st = PRJ_ST[prjStatus(p, todayIso())]; const ms = ntFirst(p.members || []);
+  const p = prjList(P.px).find(x => x.id === P.id); if (!p) return '';
+  if (isAdmin()) return `<div class="scrim" data-act="close"></div><aside class="drawer wide" role="dialog" aria-label="Sửa công trình"><div class="row between"><div><h2>Sửa công trình · ${esc(PXI[P.px].short)}</h2><p class="hint">Tài khoản quản trị sửa, xóa được công trình của mọi phân xưởng. Nội dung tự lưu.</p></div><button class="btn sm" data-act="close">Đóng</button></div>
+    <div class="body">${prjCardHtml(P.px, p, true, todayIso())}</div></aside>`; const c = ctx(); const st = PRJ_ST[prjStatus(p, todayIso())]; const ms = ntFirst(p.members || []);
   const rows = ms.map((m, i) => { const s2 = m.sid && IDX.get(m.sid); const ph = personPhone(m, c);
     return `<div class="cand" style="cursor:default"><span class="num" style="width:22px;color:var(--muted)">${i + 1}</span><span class="grow"><b>${esc(personName(m, c))}</b>${m.nt ? ' <span class="badge">TN</span>' : ''}${!m.sid ? ' <span class="badge k">Thuê ngoài</span>' : ''}
       <small>${esc([s2 && s2.id, s2 ? s2.title : [m.trade, m.company].filter(Boolean).join(', '), s2 && s2.dept !== PXI[P.px].dept ? s2.dept : ''].filter(Boolean).join(' · '))}</small></span>${ph ? `<a href="tel:${esc(ph.replace(/[^0-9+]/g, ''))}" style="white-space:nowrap;color:var(--accent,#0f6b4f);font-weight:600;text-decoration:none">${esc(ph)}</a>` : ''}</div>`; }).join('');
