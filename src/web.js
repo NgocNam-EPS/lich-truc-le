@@ -206,9 +206,9 @@ async function onAuth(user) {
   const uidNow = user.uid; setTimeout(async () => { if (S.synced || CURRENT_UID !== uidNow) return;
     try { applyHolidays(await db.collection('holidays').get()); const st = await db.doc('staff/main').get(); if (st.exists) { setStaff(st.data().list, st.data().source); render(); } } catch (x) { err(x); } }, 6000);
   subs.push(db.doc('org/main').onSnapshot(d => { if (d.exists && !pend.has('org/main')) { S.org = Object.assign(clone(DEFAULT_ORG), clone(d.data())); render(); } }, () => { }));
-  subs.push(db.collection('phones').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('phones/' + d.id) ? S.phones[d.id] : clone(d.data())); S.phones = n; if (!S.panel) render(); }, () => { }));
-  subs.push(db.collection('projects').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('projects/' + d.id) ? S.projects[d.id] : clone(d.data())); S.projects = n; if (!S.panel) render(); }, () => { }));
-  subs.push(db.collection('outside').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('outside/' + d.id) ? S.outside[d.id] : clone(d.data())); S.outside = n; if (!S.panel) render(); }, () => { }));
+  subs.push(db.collection('phones').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('phones/' + d.id) ? S.phones[d.id] : clone(d.data())); Object.keys(S.phones || {}).forEach(id => { if (pend.has('phones/' + id) && !(id in n)) n[id] = S.phones[id]; }); S.phones = n; if (!S.panel) render(); }, () => { }));
+  subs.push(db.collection('projects').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('projects/' + d.id) ? S.projects[d.id] : clone(d.data())); Object.keys(S.projects || {}).forEach(id => { if (pend.has('projects/' + id) && !(id in n)) n[id] = S.projects[id]; }); S.projects = n; if (!S.panel) render(); }, () => { }));
+  subs.push(db.collection('outside').onSnapshot(snap => { const n = {}; snap.docs.forEach(d => n[d.id] = pend.has('outside/' + d.id) ? S.outside[d.id] : clone(d.data())); Object.keys(S.outside || {}).forEach(id => { if (pend.has('outside/' + id) && !(id in n)) n[id] = S.outside[id]; }); S.outside = n; if (!S.panel) render(); }, () => { }));
   if (S.me.role === 'owner') subs.push(db.collection('roles').onSnapshot(snap => { S.roles = snap.docs.map(d => Object.assign({ uid: d.id }, d.data())).sort((a, b) => (a.at || 0) - (b.at || 0)); if (S.tab === 'accounts') render(); }, () => { }));
   setSave('connecting'); render();
 }
