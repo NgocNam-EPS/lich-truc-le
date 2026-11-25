@@ -12,7 +12,7 @@ patches=[
  ("case 'accounts': return S.me.role === 'owner' ? viewAccounts() : viewOverview();","case 'accounts': return S.me.role === 'owner' ? viewAccounts() : viewOverview(); case 'data': return S.me.role === 'owner' ? viewData() : viewOverview();"),
  ("\nboot();\n</script>","\n</script>"),
  ("at: Date.now() };\n      S.files[doc.id] = doc;","at: Date.now(), uid: window.CURRENT_UID || null };\n      S.files[doc.id] = doc;"),
- ('<title>Lịch trực lễ EPS</title>\n<meta name="claude:viewport-fit-sides" content="cover">','<!doctype html>\n<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<title>Lịch trực lễ EPS</title><style>[hidden]{display:none!important}body{margin:0}</style>'),
+ ('<title>Lịch trực lễ EPS</title>\n<meta name="claude:viewport-fit-sides" content="cover">','<!doctype html>\n<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<title>Lịch trực lễ EPS</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#C4372B"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Trực lễ EPS"><meta name="apple-mobile-web-app-status-bar-style" content="default"><style>[hidden]{display:none!important}body{margin:0}</style>'),
  ("</style>\n\n<header","</style>\n</head><body>\n<header"),
 ]
 for a,b in patches:
@@ -25,6 +25,9 @@ ui=ui.rstrip()+"""
 <script src="firebase-config.js"></script>
 <script>
 """+open('web.js').read()+"""
+</script>
+<script>
+"""+open('pwa/install.js').read()+"""
 </script>
 </body></html>
 """

@@ -42,6 +42,15 @@ Quyền được kiểm tra trên máy chủ bằng `firestore.rules`: phân xư
 
 Giờ làm thêm chỉ tính cho nhân sự EPS (không tính Ca SCTX và người thuê ngoài): mỗi ca trực 12 giờ tính 10,5 giờ làm thêm, riêng ca đêm đầu tiên của dịp lễ tính 2,5 giờ (chỉnh được ở tab Nội dung in & sơ đồ). Ứng dụng cảnh báo khi vượt 40 giờ/tháng hoặc 300 giờ/năm.
 
+## Cài lên điện thoại (ứng dụng web PWA)
+
+Trang web cài được như ứng dụng, có biểu tượng "Trực lễ EPS" trên màn hình chính, mở toàn màn hình:
+
+- **Android (Chrome):** mở trang, bấm **Cài đặt** ở thanh gợi ý phía dưới, hoặc menu ⋮ → **Cài đặt ứng dụng** / **Thêm vào màn hình chính**.
+- **iPhone (Safari):** mở trang, bấm nút **Chia sẻ** → **Thêm vào MH chính**.
+
+Ứng dụng luôn lấy bản mới nhất khi có mạng (`sw.js`), nên không cần tải lại thủ công sau mỗi lần cập nhật.
+
 ## Giới hạn gói miễn phí
 
 Firestore miễn phí 1 GiB dữ liệu, 50.000 lượt đọc và 20.000 lượt ghi mỗi ngày, đủ cho quy mô 8 đơn vị. Mỗi văn bản tải lên tối đa 20 MB; nên scan PDF ở độ phân giải vừa phải (khoảng 1–3 MB mỗi văn bản).
